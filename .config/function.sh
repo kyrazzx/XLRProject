@@ -18,6 +18,15 @@ importFunctions() {
         if [[ "$rel_path" =~ ^utility/dev/ ]]; then
             continue
         fi
+        if [[ "$rel_path" == "config.sh" ]]; then
+            continue
+        fi
+        if [[ "$rel_path" == "utility/distro.sh" || "$rel_path" == "utility/colors.sh" ]]; then
+            continue
+        fi
+        if [[ "$rel_path" == "xlr/healthcheck.sh" ]]; then
+            continue
+        fi
         if [[ "$rel_path" != "$current_file" && -z "${imported[$rel_path]}" ]]; then
             if [[ "$1" == "--debug" ]]; then
                 echo "Importing: $rel_path"  # Debug output
