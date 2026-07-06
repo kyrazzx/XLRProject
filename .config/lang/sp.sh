@@ -38,6 +38,14 @@ dotnet_sp="¿Desea instalar Dotnet [Requerido para IW4Madmin] (Y/n)?"
 dotnet_failed_install_sp="La instalación de Dotnet falló."
 dotnet_install_sp="Instalando Dotnet."
 
+xlr_backups_sp="¿Activar copias de seguridad automáticas XLR (Y/n)?"
+xlr_iw4madmin_sp="¿Instalar IW4MAdmin para clasificación (Y/n)?"
+xlr_discord_sp="¿Instalar bot de Discord XLR (Y/n)?"
+xlr_install_sp="Configurando stack XLR."
+server_key_sp="Clave de servidor Plutonium (https://platform.plutonium.pw/serverkeys):"
+rcon_password_sp="Contrasena RCON (Enter = igual que la clave):"
+discord_token_sp="Token del bot Discord (Enter para omitir):"
+
 # Mensajes de Wine
 wine_sp="Instalando Wine."
 

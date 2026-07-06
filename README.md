@@ -2,6 +2,7 @@
 
 ![Version](https://img.shields.io/badge/Version-3.1.1-blue)
 ![Debian](https://img.shields.io/badge/Debian-10%20%7C%2011%20%7C%2012-brightgreen?showLogo=Debian)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-orange?logo=ubuntu)
 ![Plutonium T6](https://img.shields.io/badge/Plutonium-T6-blue)
 ![License](https://img.shields.io/badge/License-GPL--3.0-yellow)
 ![GitHub repo size](https://img.shields.io/github/repo-size/Sterbweise/T6Server)
@@ -85,7 +86,7 @@ T6 Server is a comprehensive management suite for setting up and running Plutoni
 ## Prerequisites
 
 ### System Requirements
-- **Operating System:** Debian 10, 11, or 12 (64-bit)
+- **Operating System:** Debian 10, 11, or 12 (64-bit) — Ubuntu 22.04 or 24.04 LTS (64-bit)
 - **Architecture:** x86_64 (AMD64)
 - **RAM:** Minimum 512MB, 2GB recommended
 - **Storage:** At least 15GB of free disk space

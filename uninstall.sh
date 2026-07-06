@@ -44,6 +44,7 @@ confirmUninstall
 
 # Perform uninstallation
 # These functions remove the various components installed by the installation script
+uninstallXLR
 uninstallGameBinaries   # Removes game files and directories
 uninstallDotnet         # Uninstalls .NET framework
 uninstallWine           # Removes Wine

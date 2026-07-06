@@ -1,0 +1,289 @@
+#!/bin/bash
+
+readonly XLR_MANAGER_PATH=$(readlink -f "${BASH_SOURCE[0]}")
+readonly XLR_MANAGER_DIR=$(dirname "$XLR_MANAGER_PATH")
+
+source "$XLR_MANAGER_DIR/lib/server_core.sh"
+
+declare -A XLR_COLORS=(
+    [reset]='\033[0m'
+    [red]='\033[0;31m'
+    [green]='\033[0;32m'
+    [yellow]='\033[0;33m'
+    [blue]='\033[0;34m'
+    [cyan]='\033[0;36m'
+)
+
+xlr_default_config() {
+    echo "$XLR_MANAGER_DIR/server_config.json"
+}
+
+xlr_check_dependencies() {
+    local deps=("wine" "jq" "bc" "curl")
+    local missing=()
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo -e "${XLR_COLORS[red]}Missing dependencies:${XLR_COLORS[reset]} ${missing[*]}"
+        return 1
+    fi
+    return 0
+}
+
+xlr_display_help() {
+    echo -e "${XLR_COLORS[blue]}XLR Server Manager${XLR_COLORS[reset]}"
+    echo ""
+    echo "Usage: $0 [command] [server_id]"
+    echo ""
+    echo "Commands:"
+    echo "  start [id|all]     Start one or all enabled servers"
+    echo "  stop [id|all]      Stop one or all servers"
+    echo "  restart [id|all]   Restart one or all servers"
+    echo "  status             Show server status"
+    echo "  monitor            Monitor and auto-restart servers"
+    echo "  backup             Run backup now"
+    echo "  sync-iw4m          Sync IW4MAdmin server list"
+    echo "  scheduled-restart  Restart idle servers based on schedule"
+    echo "  update             Update Plutonium binaries"
+    echo "  --help             Show this help"
+    echo ""
+    echo "Configuration: server_config.json"
+}
+
+xlr_get_server_by_id() {
+    local config_file="$1"
+    local server_id="$2"
+    jq -c --arg id "$server_id" '.servers[] | select(.id == $id)' "$config_file"
+}
+
+xlr_foreach_server() {
+    local config_file="$1"
+    local target="$2"
+    local callback="$3"
+
+    if [ "$target" = "all" ] || [ -z "$target" ]; then
+        while IFS= read -r server; do
+            local enabled
+            enabled=$(echo "$server" | jq -r '.enabled // true')
+            if [ "$enabled" = "true" ]; then
+                "$callback" "$config_file" "$server"
+            fi
+        done < <(jq -c '.servers[]' "$config_file")
+    else
+        local server
+        server=$(xlr_get_server_by_id "$config_file" "$target")
+        if [ -z "$server" ]; then
+            echo -e "${XLR_COLORS[red]}Unknown server:${XLR_COLORS[reset]} $target"
+            return 1
+        fi
+        "$callback" "$config_file" "$server"
+    fi
+}
+
+xlr_cmd_start_one() {
+    local config_file="$1"
+    local server_config="$2"
+    local server_id port pid
+    server_id=$(echo "$server_config" | jq -r '.id')
+    port=$(echo "$server_config" | jq -r '.port')
+    if pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
+        echo -e "${XLR_COLORS[yellow]}$server_id already running (pid $pid)${XLR_COLORS[reset]}"
+        return 0
+    fi
+    xlr_launch_server_process "$config_file" "$server_config"
+    echo -e "${XLR_COLORS[green]}Started $server_id on port $port${XLR_COLORS[reset]}"
+}
+
+xlr_cmd_stop_one() {
+    local config_file="$1"
+    local server_config="$2"
+    local server_id
+    server_id=$(echo "$server_config" | jq -r '.id')
+    xlr_stop_server "$config_file" "$server_config"
+    echo -e "${XLR_COLORS[green]}Stopped $server_id${XLR_COLORS[reset]}"
+}
+
+xlr_cmd_restart_one() {
+    local config_file="$1"
+    local server_config="$2"
+    xlr_cmd_stop_one "$config_file" "$server_config"
+    sleep 2
+    xlr_cmd_start_one "$config_file" "$server_config"
+}
+
+xlr_cmd_status() {
+    local config_file="$1"
+    printf "%-16s %-8s %-8s %-10s %s\n" "SERVER" "PORT" "STATUS" "PLAYERS" "NAME"
+    while IFS= read -r server; do
+        local server_id port name pid status players rcon_ip rcon_pass
+        server_id=$(echo "$server" | jq -r '.id')
+        port=$(echo "$server" | jq -r '.port')
+        name=$(echo "$server" | jq -r '.name')
+        rcon_ip=$(jq -r '.general_config.rcon_ip // "127.0.0.1"' "$config_file")
+        rcon_pass=$(echo "$server" | jq -r '.rcon_password // .key')
+        if pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
+            status="${XLR_COLORS[green]}UP${XLR_COLORS[reset]}"
+            players=$(xlr_get_player_count "$rcon_ip" "$port" "$rcon_pass")
+        else
+            status="${XLR_COLORS[red]}DOWN${XLR_COLORS[reset]}"
+            players="-"
+        fi
+        printf "%-16s %-8s " "$server_id" "$port"
+        echo -e -n "$status"
+        printf " %-10s %s\n" "$players" "$name"
+    done < <(jq -c '.servers[]' "$config_file")
+}
+
+xlr_monitor_once() {
+    local config_file="$1"
+    local monitoring_log_dir max_log_files webhook_url
+    monitoring_log_dir=$(jq -r '.monitoring_config.log_directory // "./logs/monitoring"' "$config_file")
+    if [[ "$monitoring_log_dir" != /* ]]; then
+        monitoring_log_dir="$XLR_MANAGER_DIR/$monitoring_log_dir"
+    fi
+    max_log_files=$(jq -r '.monitoring_config.max_log_files // 30' "$config_file")
+    webhook_url=$(jq -r '.monitoring_config.discord_webhook // ""' "$config_file")
+    mkdir -p "$monitoring_log_dir"
+    xlr_rotate_logs "$monitoring_log_dir" "$max_log_files"
+
+    while IFS= read -r server; do
+        local server_id port enabled max_cpu max_memory pid current_cpu current_memory
+        server_id=$(echo "$server" | jq -r '.id')
+        enabled=$(echo "$server" | jq -r '.enabled // true')
+        [ "$enabled" != "true" ] && continue
+        port=$(echo "$server" | jq -r '.port')
+        max_cpu=$(echo "$server" | jq -r '.resource_limits.max_cpu_percent // 90')
+        max_memory=$(echo "$server" | jq -r '.resource_limits.max_memory_mb // 4096')
+
+        if ! pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
+            xlr_write_log "$monitoring_log_dir" "$server_id" "Server down, restarting"
+            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id is down, restarting..."
+            xlr_launch_server_process "$config_file" "$server"
+            continue
+        fi
+
+        current_cpu=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')
+        current_memory=$(ps -p "$pid" -o rss= 2>/dev/null | awk '{print $1 / 1024}')
+        current_cpu=${current_cpu:-0}
+        current_memory=${current_memory:-0}
+
+        xlr_write_log "$monitoring_log_dir" "$server_id" "CPU=${current_cpu}% MEM=${current_memory}MB PID=$pid"
+
+        if (( $(echo "$current_cpu > $max_cpu" | bc -l) )) || (( $(echo "$current_memory > $max_memory" | bc -l) )); then
+            xlr_write_log "$monitoring_log_dir" "$server_id" "Resource limit exceeded, restarting"
+            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id exceeded resource limits, restarting..."
+            xlr_stop_server "$config_file" "$server"
+            sleep 2
+            xlr_launch_server_process "$config_file" "$server"
+        fi
+    done < <(jq -c '.servers[]' "$config_file")
+}
+
+xlr_run_backup() {
+    local config_file="$1"
+    local workdir
+    workdir=$(dirname "$(dirname "$XLR_MANAGER_DIR")")
+    bash "$workdir/.config/xlr/runBackup.sh" "$config_file"
+}
+
+xlr_scheduled_restart() {
+    local config_file="$1"
+    local idle_hours rcon_ip
+    idle_hours=$(jq -r '.restart_config.idle_hours // 2' "$config_file")
+    rcon_ip=$(jq -r '.general_config.rcon_ip // "127.0.0.1"' "$config_file")
+    local idle_seconds=$((idle_hours * 3600))
+
+    while IFS= read -r server; do
+        local server_id port rcon_pass pid uptime started_at player_count
+        server_id=$(echo "$server" | jq -r '.id')
+        port=$(echo "$server" | jq -r '.port')
+        rcon_pass=$(echo "$server" | jq -r '.rcon_password // .key')
+        if ! pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
+            continue
+        fi
+        player_count=$(xlr_get_player_count "$rcon_ip" "$port" "$rcon_pass")
+        started_at=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
+        local now uptime_sec
+        now=$(date +%s)
+        uptime_sec=$((now - started_at))
+        if [ "$player_count" -eq 0 ] && [ "$uptime_sec" -gt "$idle_seconds" ]; then
+            xlr_write_log "$(xlr_server_log_dir "$config_file" "$server_id")" "$server_id" "Scheduled restart (idle)"
+            xlr_cmd_restart_one "$config_file" "$server"
+        fi
+    done < <(jq -c '.servers[]' "$config_file")
+}
+
+xlr_main() {
+    local command="${1:-}"
+    local target="${2:-all}"
+    local config_file
+    config_file=$(xlr_resolve_config "${3:-}") || config_file=$(xlr_default_config)
+
+    case "$command" in
+        ""|--help|-h|help)
+            xlr_display_help
+            exit 0
+            ;;
+        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m)
+            xlr_check_dependencies || exit 1
+            ;;
+        *)
+            echo "Unknown command: $command"
+            xlr_display_help
+            exit 1
+            ;;
+    esac
+
+    if [ ! -f "$config_file" ]; then
+        echo -e "${XLR_COLORS[red]}Configuration not found:${XLR_COLORS[reset]} $config_file"
+        exit 1
+    fi
+
+    case "$command" in
+        start)
+            xlr_foreach_server "$config_file" "$target" xlr_cmd_start_one
+            ;;
+        stop)
+            xlr_foreach_server "$config_file" "$target" xlr_cmd_stop_one
+            ;;
+        restart)
+            xlr_foreach_server "$config_file" "$target" xlr_cmd_restart_one
+            ;;
+        status)
+            xlr_cmd_status "$config_file"
+            ;;
+        monitor)
+            local interval
+            interval=$(jq -r '.monitoring_config.update_interval // 30' "$config_file")
+            while true; do
+                xlr_monitor_once "$config_file"
+                sleep "$interval"
+            done
+            ;;
+        backup)
+            xlr_run_backup "$config_file"
+            ;;
+        sync-iw4m)
+            local workdir
+            workdir=$(dirname "$(dirname "$XLR_MANAGER_DIR")")
+            # shellcheck source=/dev/null
+            source "$workdir/.config/config.sh"
+            # shellcheck source=/dev/null
+            source "$workdir/.config/xlr/configureIW4MAdmin.sh" --import
+            configureIW4MAdmin
+            echo -e "${XLR_COLORS[green]}IW4MAdmin configuration synced${XLR_COLORS[reset]}"
+            ;;
+        scheduled-restart)
+            xlr_scheduled_restart "$config_file"
+            ;;
+        update)
+            xlr_update_plutonium "$(xlr_get_install_dir "$config_file")"
+            echo -e "${XLR_COLORS[green]}Plutonium update completed${XLR_COLORS[reset]}"
+            ;;
+    esac
+}
+
+xlr_main "$@"

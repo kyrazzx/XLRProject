@@ -1,55 +1,141 @@
 {
+    "general_config": {
+        "install_dir": "/opt/T6Server/Plutonium",
+        "game_path_mp": "/opt/T6Server/Server/Multiplayer",
+        "game_path_zm": "/opt/T6Server/Server/Zombie",
+        "executable_path": "./bin/plutonium-bootstrapper-win32.exe",
+        "servers_root": "./servers",
+        "rcon_ip": "127.0.0.1",
+        "backup_dir": "/opt/T6Server/backups"
+    },
+    "restart_config": {
+        "idle_hours": 2,
+        "enabled": true
+    },
+    "backup_config": {
+        "enabled": true,
+        "interval_hours": 6,
+        "retention_days": 14,
+        "paths": [
+            "Plutonium/storage/t6/stats",
+            "Plutonium/storage/t6/players",
+            "Plutonium/storage/t6/logs",
+            "Plutonium/servers",
+            "Server/Multiplayer/main",
+            "Server/Zombie/main",
+            "IW4MAdmin/Database"
+        ]
+    },
+    "monitoring_config": {
+        "update_interval": 30,
+        "log_directory": "./logs/monitoring",
+        "max_log_files": 30,
+        "discord_webhook": ""
+    },
+    "discord_config": {
+        "enabled": false,
+        "token": "",
+        "status_channel_id": "",
+        "guild_id": "",
+        "update_interval": 60
+    },
+    "iw4madmin_config": {
+        "enabled": false,
+        "install_dir": "/opt/T6Server/IW4MAdmin",
+        "web_port": 1624,
+        "manual_log_path": "/opt/T6Server/Plutonium/storage/t6/logs"
+    },
     "servers": [
         {
-            "id": "t6mp_server_1",
-            "name": "Black Ops II Multiplayer Server 1",
+            "id": "ffa",
+            "name": "XLR FFA",
+            "enabled": true,
             "port": 28960,
             "mode": "t6mp",
+            "game_path": "/opt/T6Server/Server/Multiplayer",
+            "gamesetting": "dm.cfg",
+            "gametype": "dm",
+            "log_file": "games_mp_ffa.log",
+            "config": "dedicated_ffa.cfg",
             "mods": "",
             "key": "YOURKEY",
-            "config": "dedicated.cfg",
+            "rcon_password": "YOURKEY",
             "additional_params": {
-                "sv_network_protocol": 0,
-                "sv_maxclients": 0,
-                "sv_anticheat": 0,
-                "sv_pure": 0
+                "sv_maxclients": 18,
+                "sv_pure": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 70,
-                "max_memory_mb": 2048
+                "max_cpu_percent": 80,
+                "max_memory_mb": 3072
             }
         },
         {
-            "id": "t6zm_server_1",
-            "name": "Black Ops II Zombies Server 1",
+            "id": "tdm",
+            "name": "XLR TDM",
+            "enabled": true,
             "port": 28961,
-            "mode": "t6zm",
+            "mode": "t6mp",
+            "game_path": "/opt/T6Server/Server/Multiplayer",
+            "gamesetting": "tdm.cfg",
+            "gametype": "war",
+            "log_file": "games_mp_tdm.log",
+            "config": "dedicated_tdm.cfg",
             "mods": "",
             "key": "YOURKEY",
-            "config": "dedicated_zm.cfg",
+            "rcon_password": "YOURKEY",
             "additional_params": {
-                "sv_network_protocol": 0,
-                "sv_maxclients": 0,
-                "sv_anticheat": 0,
+                "sv_maxclients": 18,
+                "sv_pure": 1
+            },
+            "resource_limits": {
+                "max_cpu_percent": 80,
+                "max_memory_mb": 3072
+            }
+        },
+        {
+            "id": "gungame",
+            "name": "XLR Gun Game",
+            "enabled": true,
+            "port": 28962,
+            "mode": "t6mp",
+            "game_path": "/opt/T6Server/Server/Multiplayer",
+            "gamesetting": "gun.cfg",
+            "gametype": "gun",
+            "log_file": "games_mp_gungame.log",
+            "config": "dedicated_gungame.cfg",
+            "mods": "",
+            "key": "YOURKEY",
+            "rcon_password": "YOURKEY",
+            "additional_params": {
+                "sv_maxclients": 18,
+                "sv_pure": 1
+            },
+            "resource_limits": {
+                "max_cpu_percent": 80,
+                "max_memory_mb": 3072
+            }
+        },
+        {
+            "id": "zombies",
+            "name": "XLR Zombies",
+            "enabled": false,
+            "port": 28963,
+            "mode": "t6zm",
+            "game_path": "/opt/T6Server/Server/Zombie",
+            "gamesetting": "zm_standard_transit.cfg",
+            "log_file": "games_zm.log",
+            "config": "dedicated_zm.cfg",
+            "mods": "",
+            "key": "YOURKEY",
+            "rcon_password": "YOURKEY",
+            "additional_params": {
+                "sv_maxclients": 4,
                 "sv_pure": 0
             },
             "resource_limits": {
-                "max_cpu_percent": 70,
-                "max_memory_mb": 2048
+                "max_cpu_percent": 80,
+                "max_memory_mb": 3072
             }
         }
-    ],
-    "general_config": {
-        "server_name": "Black Ops II Server",
-        "server_description": "A dedicated server for Call of Duty: Black Ops II using Plutonium.",
-        "server_website": "https://example.com",
-        "executable_path": "./bin/plutonium-bootstrapper-win32.exe",
-        "install_dir": "/opt/T6Server/Plutonium"
-    },
-    "monitoring_config": {
-        "update_interval": 3,
-        "log_directory": "./monitoring_logs",
-        "max_log_files": 10,
-        "notification_email": "admin@example.com"
-    }
-} 
+    ]
+}

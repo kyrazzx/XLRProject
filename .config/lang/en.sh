@@ -38,6 +38,14 @@ dotnet_en="Do you want to install Dotnet [Required for IW4Madmin] (Y/n)?"
 dotnet_failed_install_en="Dotnet installation failed."
 dotnet_install_en="Installing Dotnet."
 
+xlr_backups_en="Enable XLR automatic backups (Y/n)?"
+xlr_iw4madmin_en="Install IW4MAdmin for leaderboard (Y/n)?"
+xlr_discord_en="Install XLR Discord bot (Y/n)?"
+xlr_install_en="Configuring XLR stack."
+server_key_en="Plutonium server key (https://platform.plutonium.pw/serverkeys):"
+rcon_password_en="RCON password (Enter = same as key):"
+discord_token_en="Discord bot token (Enter to skip):"
+
 # Wine Messages
 wine_en="Installing Wine."
 

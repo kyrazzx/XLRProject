@@ -1,9 +1,9 @@
 # Function to confirm installations
 # This allows users to confirm installations of optional components
 confirmInstallations() {
-    local options=("firewall" "dotnet")
-    local descriptions=("firewall" "dotnet")
-    local variables=("firewall" "dotnet")
+    local options=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
+    local descriptions=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
+    local variables=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
 
     for i in "${!options[@]}"; do
         local option="${options[$i]}"

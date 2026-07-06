@@ -30,11 +30,14 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
     VERSION=$VERSION_ID
+    VERSION_ID=$VERSION_ID
 else
-    # Default to Debian 10 if detection fails
     DISTRO="debian"
     VERSION="10"
+    VERSION_ID="10"
 fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/utility/distro.sh"
 
 # Color codes for terminal output
 # Import color definitions from utility/colors.sh
@@ -47,6 +50,13 @@ language=0    # Default language setting (0 for English)
 firewall=""   # Firewall configuration (empty string for default behavior)
 ssh_port=22   # Default SSH port
 dotnet=""     # .NET installation flag (empty string for default behavior)
+xlr_backups=""
+xlr_iw4madmin=""
+xlr_discord=""
+server_key=""
+rcon_password=""
+discord_token=""
+discord_webhook=""
 
 # Function to check and install required commands
 checkAndInstallCommand() {

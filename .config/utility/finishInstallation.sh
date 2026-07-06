@@ -71,6 +71,26 @@ finishInstallation() {
             "$(netstat -tuln | grep ":${ssh_port:-22}" > /dev/null && echo "${COLORS[GREEN]}Open${COLORS[RESET]}" || echo "${COLORS[RED]}Closed${COLORS[RESET]}")"
     fi
     
+    if [ -f "${WORKDIR}/Plutonium/XLRManager.sh" ]; then
+        printf " - ${COLORS[GREEN]}✓${COLORS[RESET]} XLR multi-server manager installed\n"
+    fi
+
+    if [ -f "${WORKDIR}/IW4MAdmin/StartIW4MAdmin.sh" ]; then
+        printf " - ${COLORS[GREEN]}✓${COLORS[RESET]} IW4MAdmin installed\n"
+    fi
+
+    if [ -f "${WORKDIR}/Resources/discord/venv/bin/python" ]; then
+        printf " - ${COLORS[GREEN]}✓${COLORS[RESET]} Discord bot environment ready\n"
+    fi
+
+    printf "\n${COLORS[CYAN]} XLR Management:${COLORS[RESET]}\n"
+    printf " - Config: %s/Plutonium/server_config.json\n" "${WORKDIR:-/opt/T6Server}"
+    printf " - Mono server: %s/Plutonium/T6Server.sh\n" "${WORKDIR:-/opt/T6Server}"
+    printf " - Multi server: %s/Plutonium/XLRManager.sh [start|stop|status|monitor]\n" "${WORKDIR:-/opt/T6Server}"
+    printf " - Systemd: systemctl start xlr-manager.service\n"
+    printf " - IW4MAdmin: http://%s:%s\n" "${PUBLIC_IP}" "$(jq -r '.iw4madmin_config.web_port // 1624' "${WORKDIR}/Plutonium/server_config.json" 2>/dev/null || echo 1624)"
+    printf " - Configure discord token in server_config.json if skipped during install\n"
+
     # Wait for user acknowledgment
     printf "\n${COLORS[YELLOW]}Press any key to exit...${COLORS[RESET]}"
     stty sane

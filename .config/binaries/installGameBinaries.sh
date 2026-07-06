@@ -14,8 +14,9 @@ fi
 # Function to install game binaries
 installGameBinaries () {
     {
-        # Create directory structure for Plutonium
-        mkdir -p "$WORKDIR/Plutonium/storage/t6/"{players,gamesettings,playlists,stats,scripts,mods}
+        downloadGameTorrent
+
+        mkdir -p "$WORKDIR/Plutonium/storage/t6/"{players,gamesettings,playlists,stats,scripts,mods,logs}
 
         # Create directory structure for Multiplayer
         mkdir -p "$WORKDIR/Server/Multiplayer/usermaps"
@@ -91,6 +92,12 @@ installGameBinaries () {
 
         # Make T6Server.sh executable
         chmod +x "$WORKDIR/Plutonium/T6Server.sh"
+        chmod +x "$WORKDIR/Plutonium/XLRManager.sh" 2>/dev/null || true
+        chmod +x "$WORKDIR/Plutonium/start_server_and_monitoring.sh" 2>/dev/null || true
+        chmod +x "$WORKDIR/Plutonium/lib/server_core.sh" 2>/dev/null || true
+        chmod +x "$WORKDIR/.config/xlr/"*.sh 2>/dev/null || true
+        chmod +x "$WORKDIR/Resources/scripts/"*.sh 2>/dev/null || true
+        chmod +x "$WORKDIR/xlr-configure.sh" 2>/dev/null || true
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "binary")"
     

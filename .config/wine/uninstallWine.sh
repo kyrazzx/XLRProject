@@ -19,15 +19,10 @@ uninstallWine() {
             apt-get remove --purge winehq-stable -y
         fi
 
-        # Remove Wine repository based on Debian version if it exists
-        if [ -f /etc/apt/sources.list.d/wine.list ]; then
-            rm /etc/apt/sources.list.d/wine.list
-        fi
-
-        # Remove Wine repository key if it exists
-        if [ -f /etc/apt/trusted.gpg.d/winehq.asc ]; then
-            rm /etc/apt/trusted.gpg.d/winehq.asc
-        fi
+        rm -f /etc/apt/sources.list.d/wine.list
+        rm -f /etc/apt/sources.list.d/winehq-*.sources
+        rm -f /etc/apt/trusted.gpg.d/winehq.asc
+        rm -f /etc/apt/keyrings/winehq-archive.key
 
         # Remove Wine environment variables from .bashrc
         sed -i '/WINEPREFIX/d' ~/.bashrc

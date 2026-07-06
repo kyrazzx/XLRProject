@@ -40,7 +40,8 @@ selectLanguage
 showLogo
 confirmInstallations
 
-# Show logo
+promptServerCredentials
+
 showLogo
 
 # Update the system
@@ -74,6 +75,8 @@ fi
 # Install game binaries
 # Downloads and sets up the necessary game files for the server
 installGameBinaries 
+
+installXLRStack
 
 # Display installation completion message
 # Informs the user that the installation process is complete

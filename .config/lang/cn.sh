@@ -36,6 +36,14 @@ dotnet_cn="是否要安装Dotnet [IW4Madmin所需]（Y/n）？"
 dotnet_failed_install_cn="Dotnet安装失败。"
 dotnet_install_cn="正在安装Dotnet。"
 
+xlr_backups_cn="是否启用XLR自动备份（Y/n）？"
+xlr_iw4madmin_cn="是否安装IW4MAdmin排行榜（Y/n）？"
+xlr_discord_cn="是否安装XLR Discord机器人（Y/n）？"
+xlr_install_cn="正在配置XLR堆栈。"
+server_key_cn="Plutonium服务器密钥 (https://platform.plutonium.pw/serverkeys)："
+rcon_password_cn="RCON密码（回车=与密钥相同）："
+discord_token_cn="Discord机器人令牌（回车跳过）："
+
 # Wine消息
 wine_cn="正在安装Wine。"
 
