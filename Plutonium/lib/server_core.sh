@@ -297,12 +297,6 @@ xlr_launch_server_process() {
     local wrapper_pid=$!
     echo "$wrapper_pid" > "$(xlr_server_pid_file "$config_file" "$server_id")"
     echo "running" > "$(xlr_server_state_file "$config_file" "$server_id")"
-    sleep 3
-    local game_pid
-    game_pid=$(xlr_find_server_pid "$server_port")
-    if [ -n "$game_pid" ]; then
-        echo "$game_pid" > "$(xlr_server_pid_file "$config_file" "$server_id")"
-    fi
     return 0
 }
 
@@ -310,30 +304,41 @@ xlr_stop_server() {
     local config_file="$1"
     local server_config="$2"
 
-    local server_id port pid wrapper_pid pid_file
+    local server_id port pid wrapper_pid pid_file stdout_log
     server_id=$(echo "$server_config" | jq -r '.id')
     port=$(echo "$server_config" | jq -r '.port')
     pid_file=$(xlr_server_pid_file "$config_file" "$server_id")
+    stdout_log=$(xlr_server_log_dir "$config_file" "$server_id")/stdout.log
     local log_dir
     log_dir=$(xlr_server_log_dir "$config_file" "$server_id")
 
-    pid=$(xlr_find_server_pid "$port")
-    if [ -n "$pid" ]; then
-        kill "$pid" 2>/dev/null
-        sleep 2
-        kill -9 "$pid" 2>/dev/null
-    fi
-
     if [ -f "$pid_file" ]; then
         wrapper_pid=$(cat "$pid_file" 2>/dev/null)
-        if [ -n "$wrapper_pid" ] && kill -0 "$wrapper_pid" 2>/dev/null; then
+        if [ -n "$wrapper_pid" ]; then
             pkill -P "$wrapper_pid" 2>/dev/null
             kill "$wrapper_pid" 2>/dev/null
+            sleep 1
+            kill -9 "$wrapper_pid" 2>/dev/null
         fi
         rm -f "$pid_file"
     fi
 
+    pkill -f "$stdout_log" 2>/dev/null
     pkill -f "net_port $port" 2>/dev/null
+
+    pid=$(xlr_find_server_pid "$port")
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null
+        sleep 1
+        kill -9 "$pid" 2>/dev/null
+    fi
+
+    sleep 1
+    if xlr_find_server_pid "$port" >/dev/null; then
+        pkill -9 -f "net_port $port" 2>/dev/null
+        fuser -k "${port}/udp" 2>/dev/null || true
+    fi
+
     echo "stopped" > "$(xlr_server_state_file "$config_file" "$server_id")" 2>/dev/null || true
     xlr_write_log "$log_dir" "$server_id" "Server stopped"
 }

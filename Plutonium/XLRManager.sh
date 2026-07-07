@@ -47,7 +47,7 @@ xlr_display_help() {
     echo "  backup             Run backup now"
     echo "  sync-iw4m          Sync IW4MAdmin server list"
     echo "  scheduled-restart  Restart idle servers based on schedule"
-    echo "  update             Update Plutonium binaries"
+    echo "  sync-servers       Stop disabled servers and start enabled ones"
     echo "  --help             Show this help"
     echo ""
     echo "Configuration: server_config.json"
@@ -83,6 +83,22 @@ xlr_foreach_server() {
     fi
 }
 
+xlr_cmd_sync_servers() {
+    local config_file="$1"
+    while IFS= read -r server; do
+        local enabled server_id port
+        enabled=$(echo "$server" | jq -r '.enabled // true')
+        server_id=$(echo "$server" | jq -r '.id')
+        port=$(echo "$server" | jq -r '.port')
+        if [ "$enabled" != "true" ]; then
+            if xlr_is_server_running "$config_file" "$server_id" "$port" >/dev/null; then
+                xlr_cmd_stop_one "$config_file" "$server"
+            fi
+        fi
+    done < <(jq -c '.servers[]' "$config_file")
+    xlr_foreach_server "$config_file" "all" xlr_cmd_start_one
+}
+
 xlr_cmd_start_one() {
     local config_file="$1"
     local server_config="$2"
@@ -110,7 +126,7 @@ xlr_cmd_restart_one() {
     local config_file="$1"
     local server_config="$2"
     xlr_cmd_stop_one "$config_file" "$server_config"
-    sleep 2
+    sleep 3
     xlr_cmd_start_one "$config_file" "$server_config"
 }
 
@@ -118,10 +134,16 @@ xlr_cmd_status() {
     local config_file="$1"
     printf "%-16s %-8s %-8s %-10s %s\n" "SERVER" "PORT" "STATUS" "PLAYERS" "NAME"
     while IFS= read -r server; do
-        local server_id port name pid status players rcon_ip rcon_pass
+        local server_id port name pid status players rcon_ip rcon_pass enabled enabled_label
         server_id=$(echo "$server" | jq -r '.id')
         port=$(echo "$server" | jq -r '.port')
         name=$(echo "$server" | jq -r '.name')
+        enabled=$(echo "$server" | jq -r '.enabled // true')
+        if [ "$enabled" = "true" ]; then
+            enabled_label=""
+        else
+            enabled_label=" (disabled)"
+        fi
         rcon_ip=$(jq -r '.general_config.rcon_ip // "127.0.0.1"' "$config_file")
         rcon_pass=$(echo "$server" | jq -r '.rcon_password // .key')
         if pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
@@ -133,7 +155,7 @@ xlr_cmd_status() {
         fi
         printf "%-16s %-8s " "$server_id" "$port"
         echo -e -n "$status"
-        printf " %-10s %s\n" "$players" "$name"
+        printf " %-10s %s%s\n" "$players" "$name" "$enabled_label"
     done < <(jq -c '.servers[]' "$config_file")
 }
 
@@ -227,7 +249,7 @@ xlr_main() {
             xlr_display_help
             exit 0
             ;;
-        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m)
+        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m|sync-servers)
             xlr_check_dependencies || exit 1
             ;;
         *)
@@ -267,6 +289,9 @@ xlr_main() {
             ;;
         backup)
             xlr_run_backup "$config_file"
+            ;;
+        sync-servers)
+            xlr_cmd_sync_servers "$config_file"
             ;;
         sync-iw4m)
             local workdir
