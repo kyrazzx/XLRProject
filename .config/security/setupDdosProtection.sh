@@ -86,8 +86,9 @@ setupDdosProtection() {
 
     local fragment_rule=""
     if [ "$drop_fragments" = "true" ]; then
-        # Drop any IPv4 fragment (MF bit or offset) — works on older nft without "ip flags"
-        fragment_rule="        udp dport { $nft_ports } @ih,6,2 & 0x3fff != 0 drop"
+        # frag-off: drop continuation/last fragments; @ih MF bit: drop first fragment
+        fragment_rule="        udp dport { $nft_ports } ip frag-off != 0 drop
+        udp dport { $nft_ports } @ih,6,2 & 0x2000 != 0 drop"
     fi
 
     mkdir -p /etc/nftables.d
