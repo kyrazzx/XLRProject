@@ -18,8 +18,17 @@ setupCustomization() {
     motd_fr=$(jq -r '.customization.motd_fr // "^5XLR EU^7 — Serveurs BO2 rapides et proteges | discord.gg/63FAj2ZMrN"' "$config_file")
     invite=$(jq -r '.customization.discord_invite // "discord.gg/63FAj2ZMrN"' "$config_file")
 
+    local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
+    local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
+    mkdir -p "$gsc_dest"
+    if [ -f "$gsc_src" ]; then
+        cp "$gsc_src" "$gsc_dest/xlr_messages.gsc"
+        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
+    fi
+
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do
         [ ! -f "$mp_main/$cfg" ] && continue
+        [ ! -w "$mp_main/$cfg" ] && continue
         if grep -q '^sets motd' "$mp_main/$cfg" 2>/dev/null; then
             sed -i "s|^sets motd.*|sets motd \"$motd_en / $motd_fr\"|" "$mp_main/$cfg"
         else
@@ -38,14 +47,6 @@ setupCustomization() {
     jq --arg invite "$invite" '
         .customization.discord_invite = $invite
     ' "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
-
-    local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
-    local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
-    mkdir -p "$gsc_dest"
-    if [ -f "$gsc_src" ]; then
-        cp "$gsc_src" "$gsc_dest/xlr_messages.gsc"
-        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_dest/xlr_messages.gsc"
-    fi
 }
 
 if [ "$1" = "--import" ]; then

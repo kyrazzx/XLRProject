@@ -74,11 +74,22 @@ sync_install_paths() {
 }
 
 run_light_post_update() {
+    local repo_user
+    repo_user=$(stat -c '%U' "$DEFAULT_DIR")
+
+    if [ -n "$repo_user" ] && [ "$repo_user" != "root" ]; then
+        sudo chown -R "$repo_user:$repo_user" \
+            "$DEFAULT_DIR/Server" \
+            "$DEFAULT_DIR/Plutonium/storage" \
+            "$DEFAULT_DIR/Plutonium/servers" \
+            2>/dev/null || true
+    fi
+
     # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/config.sh"
     # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/xlr/setupCustomization.sh" --import
-    setupCustomization
+    setupCustomization || true
 }
 
 FULL_CONFIGURE=0

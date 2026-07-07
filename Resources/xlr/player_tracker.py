@@ -117,9 +117,30 @@ def maybe_send_auto_message(config, server, state):
     state[sid]["last_auto_message"] = now
 
 
+def upsert_session_player(conn, session, entry):
+    plutonium_id = entry.get("plutonium_id") or ""
+    name = entry.get("name") or ""
+    if not plutonium_id or not name:
+        return
+    upsert_player(
+        conn,
+        plutonium_id,
+        name,
+        entry.get("ip") or "",
+        entry.get("steam_id"),
+    )
+    upsert_key = f"{plutonium_id}:{name}"
+    if upsert_key not in session.get("logged", set()):
+        session.setdefault("logged", set()).add(upsert_key)
+        print(f"[player] saved {name} ({plutonium_id})")
+
+
 def process_server(conn, config, server, state):
     sid = server["id"]
-    session = state.setdefault(sid, {"sessions": {}, "offsets": {}, "welcomed": set()})
+    session = state.setdefault(
+        sid,
+        {"sessions": {}, "offsets": {}, "welcomed": set(), "logged": set(), "unlinked_names": []},
+    )
 
     for path_key in ("stdout_log", "game_log"):
         offset = session["offsets"].get(path_key, 0)
@@ -129,23 +150,36 @@ def process_server(conn, config, server, state):
             auth = AUTH_RE.search(line)
             if auth:
                 pid = auth.group(1)
-                session["sessions"].setdefault(pid, {"plutonium_id": pid, "name": "", "steam_id": None})
+                entry = session["sessions"].setdefault(
+                    pid,
+                    {"plutonium_id": pid, "name": "", "steam_id": None, "ip": ""},
+                )
+                entry["plutonium_id"] = pid
+                if session["unlinked_names"]:
+                    entry["name"] = session["unlinked_names"].pop(0)
+                upsert_session_player(conn, session, entry)
 
             connect = CONNECT_RE.search(line)
             if connect:
                 name = connect.group(1)
+                linked = False
                 for entry in session["sessions"].values():
-                    if not entry.get("name"):
+                    if entry.get("plutonium_id") and not entry.get("name"):
                         entry["name"] = name
+                        upsert_session_player(conn, session, entry)
+                        linked = True
                         break
-                else:
-                    session["sessions"][f"tmp:{name}"] = {"plutonium_id": "", "name": name, "steam_id": None}
+                if not linked:
+                    session["unlinked_names"].append(name)
 
             steam = STEAM_RE.search(line)
             if steam:
+                steam_id = steam.group(1)
                 for entry in session["sessions"].values():
                     if not entry.get("steam_id"):
-                        entry["steam_id"] = steam.group(1)
+                        entry["steam_id"] = steam_id
+                        if entry.get("plutonium_id") and entry.get("name"):
+                            upsert_session_player(conn, session, entry)
 
             if handle_report_line(conn, sid, line):
                 print(f"[report] new in-game report on {sid}")
