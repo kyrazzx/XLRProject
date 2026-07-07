@@ -13,7 +13,7 @@ setupCustomization() {
         return 1
     fi
 
-    local motd_en motd_fr invite owner_name owner_id owner_tag owner_name_color owner_text_color
+    local motd_en motd_fr invite owner_name owner_id owner_tag owner_name_color owner_text_color lang_fr_code
     motd_en=$(jq -r '.customization.motd_en // "^5XLR EU^7 — Fast, protected BO2 servers | discord.gg/63FAj2ZMrN"' "$config_file")
     motd_fr=$(jq -r '.customization.motd_fr // "^5XLR EU^7 — Serveurs BO2 rapides et proteges | discord.gg/63FAj2ZMrN"' "$config_file")
     invite=$(jq -r '.customization.discord_invite // "discord.gg/63FAj2ZMrN"' "$config_file")
@@ -21,7 +21,8 @@ setupCustomization() {
     owner_id=$(jq -r '.customization.owner.plutonium_id // "0"' "$config_file")
     owner_tag=$(jq -r '.customization.owner.chat_tag // "[OWNER]"' "$config_file")
     owner_name_color=$(jq -r '.customization.owner.chat_name_color // "3"' "$config_file")
-    owner_text_color=$(jq -r '.customization.owner.chat_text_color // "5"' "$config_file")
+    owner_text_color=$(jq -r '.customization.owner.chat_text_color // "6"' "$config_file")
+    lang_fr_code=$(jq -r '.customization.owner.lang_fr_code // 1' "$config_file")
 
     local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
     local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
@@ -34,7 +35,8 @@ setupCustomization() {
         sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
         sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
         sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        echo "[XLR] GSC deployed -> $gsc_dest/xlr_messages.gsc (owner=${owner_name} id=${owner_id})"
+        sed -i "s|PLACEHOLDER_LANG_FR_CODE|${lang_fr_code}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
+        echo "[XLR] GSC deployed -> $gsc_dest/xlr_messages.gsc (owner=${owner_name} id=${owner_id} lang_fr=${lang_fr_code})"
     else
         echo "[XLR] WARN: missing GSC source $gsc_src"
     fi
