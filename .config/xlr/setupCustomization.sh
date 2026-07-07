@@ -7,6 +7,8 @@ fi
 xlr_deploy_welcome_gsc() {
     local workdir="$1"
     local invite="$2"
+    local owner_name="$3"
+    local owner_id="$4"
 
     local gsc_src="$workdir/Resources/gsc/mp/xlr_welcome.gsc"
     local gsc_dest_dir="$workdir/Plutonium/storage/t6/scripts/mp"
@@ -29,6 +31,8 @@ xlr_deploy_welcome_gsc() {
 
     cp "$gsc_src" "$build_file"
     sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$build_file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_NAME|${owner_name}|g" "$build_file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_ID|${owner_id}|g" "$build_file" 2>/dev/null || true
 
     if xlr_compile_gsc_file "$workdir" "$build_file" "$dest_file" "$log_file"; then
         echo "[XLR] deployed xlr_welcome.gsc (compiled)"
@@ -65,10 +69,12 @@ setupCustomization() {
         return 1
     fi
 
-    local motd_en motd_fr invite
+    local motd_en motd_fr invite owner_name owner_id
     motd_en=$(jq -r '.customization.motd_en // "^5XLR EU^7 — Fast, protected BO2 servers | discord.gg/63FAj2ZMrN"' "$config_file")
     motd_fr=$(jq -r '.customization.motd_fr // "^5XLR EU^7 — Serveurs BO2 rapides et proteges | discord.gg/63FAj2ZMrN"' "$config_file")
     invite=$(jq -r '.customization.discord_invite // "discord.gg/63FAj2ZMrN"' "$config_file")
+    owner_name=$(jq -r '.customization.owner.name // "akan3"' "$config_file")
+    owner_id=$(jq -r '.customization.owner.plutonium_id // "0"' "$config_file")
 
     local gsc_dest_dir="$workdir/Plutonium/storage/t6/scripts/mp"
     mkdir -p "$gsc_dest_dir"
@@ -77,7 +83,7 @@ setupCustomization() {
     source "$workdir/.config/xlr/compileGsc.sh"
 
     xlr_purge_legacy_gsc "$gsc_dest_dir"
-    xlr_deploy_welcome_gsc "$workdir" "$invite"
+    xlr_deploy_welcome_gsc "$workdir" "$invite" "$owner_name" "$owner_id"
 
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do
         [ ! -f "$mp_main/$cfg" ] && continue
