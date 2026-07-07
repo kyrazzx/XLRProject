@@ -9,7 +9,7 @@ xlr_ensure_gsc_tool() {
     local gsc_tool="$tools_dir/gsc-tool"
 
     if [ -x "$gsc_tool" ]; then
-        echo "$gsc_tool"
+        printf '%s\n' "$gsc_tool"
         return 0
     fi
 
@@ -27,7 +27,7 @@ xlr_ensure_gsc_tool() {
 
     url="https://github.com/xensik/gsc-tool/releases/download/${GSC_TOOL_VERSION}/${asset}"
     tmp="$tools_dir/gsc-tool-download.tar.gz"
-    echo "[XLR] Downloading gsc-tool ${GSC_TOOL_VERSION} (${asset})..."
+    echo "[XLR] Downloading gsc-tool ${GSC_TOOL_VERSION} (${asset})..." >&2
     if ! curl -fsSL "$url" -o "$tmp"; then
         echo "[XLR] ERROR: failed to download gsc-tool from GitHub" >&2
         return 1
@@ -38,18 +38,20 @@ xlr_ensure_gsc_tool() {
 
     if [ -f "$tools_dir/gsc-tool" ]; then
         chmod +x "$tools_dir/gsc-tool"
-        echo "$tools_dir/gsc-tool"
+        printf '%s\n' "$tools_dir/gsc-tool"
         return 0
     fi
 
     found="$(find "$tools_dir" -maxdepth 3 -type f -name gsc-tool 2>/dev/null | head -1)"
     if [ -n "$found" ]; then
-        chmod +x "$found"
-        echo "$found"
+        cp -f "$found" "$gsc_tool"
+        chmod +x "$gsc_tool"
+        printf '%s\n' "$gsc_tool"
         return 0
     fi
 
-    echo "[XLR] ERROR: gsc-tool binary not found after extract" >&2
+    echo "[XLR] ERROR: gsc-tool binary not found after extract in $tools_dir" >&2
+    ls -la "$tools_dir" >&2 || true
     return 1
 }
 
@@ -74,8 +76,13 @@ xlr_compile_gsc_file() {
         return 1
     fi
 
-    if ! gsc_tool="$(xlr_ensure_gsc_tool "$tools_dir")"; then
+    gsc_tool="$(xlr_ensure_gsc_tool "$tools_dir")" || {
         echo "[XLR] ERROR: gsc-tool not available — cannot compile (T6 needs compiled scripts)" >&2
+        return 1
+    }
+
+    if [ ! -x "$gsc_tool" ]; then
+        echo "[XLR] ERROR: gsc-tool is not executable: $gsc_tool" >&2
         return 1
     fi
 
@@ -84,6 +91,7 @@ xlr_compile_gsc_file() {
 
     local build_dir
     build_dir="$(dirname "$source_file")"
+    echo "[XLR] Compiling with $gsc_tool ..." >&2
     (
         cd "$build_dir" || exit 1
         "$gsc_tool" -m comp -g t6 -s pc "$(basename "$source_file")"
