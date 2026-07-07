@@ -1,0 +1,25 @@
+MANUAL GAME FILES - XLR / T6 Server
+====================================
+
+Upload your legally obtained Black Ops II server files here BEFORE running install
+with manual import enabled, or before running:
+
+  sudo ./import-game-files.sh
+
+Required layout:
+
+  Resources/binaries/zone/          (folder with .ff map/asset files)
+  Resources/binaries/binkw32.dll    (single file)
+
+These are the same files the torrent step would place automatically.
+Do not commit these files to git.
+
+After upload, from the project root:
+
+  sudo ./install.sh
+
+When asked about manual game files, answer Yes (O).
+
+Or link files only after upload:
+
+  sudo ./import-game-files.sh

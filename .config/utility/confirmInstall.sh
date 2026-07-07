@@ -1,6 +1,29 @@
 # Function to confirm installations
 # This allows users to confirm installations of optional components
 confirmInstallations() {
+    stty sane
+    if [[ -z "${manual_game_files}" ]]; then
+        while true; do
+            printf "\n${COLORS[YELLOW]}$(getMessage "manual_game_files") ${COLORS[RESET]}"
+            read -r input
+            input=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+            case "$input" in
+                "" | "o" | "oui" | "y" | "yes")
+                    manual_game_files=yes
+                    break
+                    ;;
+                "n" | "non" | "no")
+                    manual_game_files=no
+                    break
+                    ;;
+                *)
+                    echo "$(getMessage "invalid_input_yn")"
+                    ;;
+            esac
+        done
+    fi
+    export manual_game_files
+
     local options=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
     local descriptions=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
     local variables=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")

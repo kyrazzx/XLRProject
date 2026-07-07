@@ -56,7 +56,7 @@ xlr_discord=""
 server_key=""
 rcon_password=""
 discord_token=""
-discord_webhook=""
+manual_game_files=""
 
 # Function to check and install required commands
 checkAndInstallCommand() {
