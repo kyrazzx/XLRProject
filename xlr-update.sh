@@ -104,6 +104,9 @@ run_light_post_update() {
     # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/xlr/setupCustomization.sh" --import
     setupCustomization || true
+    # shellcheck source=/dev/null
+    source "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --import
+    setupDdosProtection "$CONFIG_FILE" || true
 }
 
 FULL_CONFIGURE=0

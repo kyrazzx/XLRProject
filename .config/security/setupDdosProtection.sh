@@ -4,6 +4,45 @@ if [ "$1" = "--install" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
+xlr_apply_anti_spoof_sysctl() {
+    local config_file="$1"
+    local anti_spoof
+    anti_spoof=$(jq -r '.security_hardening.anti_spoof_enabled // true' "$config_file")
+
+    cat > /etc/sysctl.d/99-xlr-network.conf << 'EOF'
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.core.netdev_max_backlog = 16384
+net.ipv4.udp_mem = 65536 131072 262144
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+EOF
+
+    if [ "$anti_spoof" = "true" ]; then
+        cat >> /etc/sysctl.d/99-xlr-network.conf << 'EOF'
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.log_martians = 0
+EOF
+    fi
+
+    sysctl -p /etc/sysctl.d/99-xlr-network.conf 2>/dev/null || true
+
+    if [ "$anti_spoof" = "true" ]; then
+        local iface_path
+        for iface_path in /proc/sys/net/ipv4/conf/*/rp_filter; do
+            echo 1 > "$iface_path" 2>/dev/null || true
+        done
+        echo 0 > /proc/sys/net/ipv4/conf/all/log_martians 2>/dev/null || true
+        echo 0 > /proc/sys/net/ipv4/conf/default/log_martians 2>/dev/null || true
+    fi
+}
+
 setupDdosProtection() {
     local config_file="${1:-$WORKDIR/Plutonium/server_config.json}"
 
@@ -18,14 +57,7 @@ setupDdosProtection() {
     fi
 
     if [ "$(jq -r '.security_hardening.sysctl_tuning // true' "$config_file")" = "true" ]; then
-        cat > /etc/sysctl.d/99-xlr-network.conf << 'EOF'
-net.core.rmem_max = 16777216
-net.core.wmem_max = 16777216
-net.core.netdev_max_backlog = 8192
-net.ipv4.udp_mem = 65536 131072 262144
-net.ipv4.conf.all.rp_filter = 1
-EOF
-        sysctl -p /etc/sysctl.d/99-xlr-network.conf 2>/dev/null || true
+        xlr_apply_anti_spoof_sysctl "$config_file"
     fi
 
     if [ "$(jq -r '.security_hardening.rate_limit_enabled // true' "$config_file")" != "true" ]; then
@@ -34,15 +66,23 @@ EOF
 
     checkAndInstallCommand nft nftables
 
-    local pps burst per_ip_pps per_ip_burst nft_ports
-    pps=$(jq -r '.security_hardening.rate_limit_pps // 3000' "$config_file")
-    burst=$(jq -r '.security_hardening.rate_limit_burst // 600' "$config_file")
-    per_ip_pps=$(jq -r '.security_hardening.rate_limit_per_ip_pps // 120' "$config_file")
-    per_ip_burst=$(jq -r '.security_hardening.rate_limit_per_ip_burst // 200' "$config_file")
+    local pps burst per_ip_pps per_ip_burst udp_min udp_max drop_fragments nft_ports
+    pps=$(jq -r '.security_hardening.rate_limit_pps // 12000' "$config_file")
+    burst=$(jq -r '.security_hardening.rate_limit_burst // 2000' "$config_file")
+    per_ip_pps=$(jq -r '.security_hardening.rate_limit_per_ip_pps // 200' "$config_file")
+    per_ip_burst=$(jq -r '.security_hardening.rate_limit_per_ip_burst // 400' "$config_file")
+    udp_min=$(jq -r '.security_hardening.udp_min_size // 24' "$config_file")
+    udp_max=$(jq -r '.security_hardening.udp_max_size // 1492' "$config_file")
+    drop_fragments=$(jq -r '.security_hardening.drop_fragments // true' "$config_file")
     nft_ports=$(jq -r '.servers[] | select(.enabled == true) | .port' "$config_file" | paste -sd, -)
 
     if [ -z "$nft_ports" ]; then
         return 0
+    fi
+
+    local fragment_rule=""
+    if [ "$drop_fragments" = "true" ]; then
+        fragment_rule="ip frag-off != 0 udp dport { $nft_ports } drop"
     fi
 
     mkdir -p /etc/nftables.d
@@ -64,6 +104,13 @@ table inet xlr {
         type filter hook input priority filter; policy accept;
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
+
+        ct state invalid ip protocol udp udp dport { $nft_ports } drop
+
+        ${fragment_rule}
+
+        udp dport { $nft_ports } length < ${udp_min} drop
+        udp dport { $nft_ports } length > ${udp_max} drop
 
         udp dport { $nft_ports } update @per_ip_limit { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} } drop
 
@@ -98,10 +145,24 @@ xlr_unban_ip_nft() {
     nft delete element inet xlr banned_ips "{ $ip }" 2>/dev/null || true
 }
 
+xlr_show_ddos_status() {
+    if ! command -v nft &>/dev/null; then
+        echo "nftables not installed"
+        return 1
+    fi
+    echo "=== sysctl anti-spoof ==="
+    sysctl net.ipv4.conf.all.rp_filter 2>/dev/null || true
+    echo ""
+    echo "=== nft table xlr ==="
+    nft list table inet xlr 2>/dev/null || echo "table inet xlr not loaded"
+}
+
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--install" ]; then
     setupDdosProtection
+elif [ "$1" = "--status" ]; then
+    xlr_show_ddos_status
 else
-    echo "Usage: $0 [--install] | [--import]"
+    echo "Usage: $0 [--install] | [--import] | [--status]"
 fi

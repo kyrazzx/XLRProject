@@ -11,11 +11,15 @@
     "security_hardening": {
         "enabled": true,
         "sysctl_tuning": true,
+        "anti_spoof_enabled": true,
+        "drop_fragments": true,
+        "udp_min_size": 24,
+        "udp_max_size": 1492,
         "rate_limit_enabled": true,
-        "rate_limit_per_ip_pps": 120,
-        "rate_limit_per_ip_burst": 200,
-        "rate_limit_pps": 3000,
-        "rate_limit_burst": 600
+        "rate_limit_per_ip_pps": 200,
+        "rate_limit_per_ip_burst": 400,
+        "rate_limit_pps": 12000,
+        "rate_limit_burst": 2000
     },
     "customization": {
         "discord_invite": "discord.gg/63FAj2ZMrN",
