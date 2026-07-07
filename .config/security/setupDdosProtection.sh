@@ -34,9 +34,11 @@ EOF
 
     checkAndInstallCommand nft nftables
 
-    local pps burst nft_ports
-    pps=$(jq -r '.security_hardening.rate_limit_pps // 800' "$config_file")
-    burst=$(jq -r '.security_hardening.rate_limit_burst // 400' "$config_file")
+    local pps burst per_ip_pps per_ip_burst nft_ports
+    pps=$(jq -r '.security_hardening.rate_limit_pps // 3000' "$config_file")
+    burst=$(jq -r '.security_hardening.rate_limit_burst // 600' "$config_file")
+    per_ip_pps=$(jq -r '.security_hardening.rate_limit_per_ip_pps // 120' "$config_file")
+    per_ip_burst=$(jq -r '.security_hardening.rate_limit_per_ip_burst // 200' "$config_file")
     nft_ports=$(jq -r '.servers[] | select(.enabled == true) | .port' "$config_file" | paste -sd, -)
 
     if [ -z "$nft_ports" ]; then
@@ -52,10 +54,18 @@ table inet xlr {
         timeout 30d
     }
 
+    set per_ip_limit {
+        type ipv4_addr
+        flags dynamic
+        size 131072
+    }
+
     chain input {
         type filter hook input priority filter; policy accept;
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
+
+        udp dport { $nft_ports } update @per_ip_limit { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} } drop
 
         udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
     }

@@ -12,8 +12,10 @@
         "enabled": true,
         "sysctl_tuning": true,
         "rate_limit_enabled": true,
-        "rate_limit_pps": 800,
-        "rate_limit_burst": 400
+        "rate_limit_per_ip_pps": 120,
+        "rate_limit_per_ip_burst": 200,
+        "rate_limit_pps": 3000,
+        "rate_limit_burst": 600
     },
     "customization": {
         "discord_invite": "discord.gg/63FAj2ZMrN",
