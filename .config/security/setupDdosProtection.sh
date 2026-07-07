@@ -86,8 +86,8 @@ setupDdosProtection() {
 
     local fragment_rule=""
     if [ "$drop_fragments" = "true" ]; then
-        fragment_rule="        udp dport { $nft_ports } ip frag-off != 0 drop
-        udp dport { $nft_ports } ip flags mf drop"
+        # Drop any IPv4 fragment (MF bit or offset) — works on older nft without "ip flags"
+        fragment_rule="        udp dport { $nft_ports } @ih,6,2 & 0x3fff != 0 drop"
     fi
 
     mkdir -p /etc/nftables.d
@@ -121,8 +121,39 @@ EOF
     fi
 
     if ! xlr_load_nft_rules; then
-        echo "Retrying with simplified nftables rules..."
+        echo "Retrying with ip frag-off fragment rule..."
+        if [ "$drop_fragments" = "true" ]; then
+            fragment_rule="        udp dport { $nft_ports } ip frag-off != 0 drop"
+        else
+            fragment_rule=""
+        fi
         cat > /etc/nftables.d/xlr-game.conf << EOF
+table inet xlr {
+    set banned_ips {
+        type ipv4_addr
+        flags timeout
+        timeout 30d
+    }
+
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+
+        ip saddr @banned_ips udp dport { $nft_ports } drop
+
+${fragment_rule}
+
+        udp dport { $nft_ports } meta length lt ${udp_min} drop
+        udp dport { $nft_ports } meta length gt ${udp_max} drop
+
+        udp dport { $nft_ports } meter game_per_ip { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets } drop
+
+        udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
+    }
+}
+EOF
+        if ! xlr_load_nft_rules; then
+            echo "Retrying with simplified nftables rules..."
+            cat > /etc/nftables.d/xlr-game.conf << EOF
 table inet xlr {
     set banned_ips {
         type ipv4_addr
@@ -142,7 +173,8 @@ table inet xlr {
     }
 }
 EOF
-        xlr_load_nft_rules || return 1
+            xlr_load_nft_rules || return 1
+        fi
     fi
 }
 
