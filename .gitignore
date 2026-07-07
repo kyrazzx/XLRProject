@@ -5,3 +5,4 @@ Resources/discord/venv/
 Resources/binaries/zone/
 Resources/binaries/binkw32.dll
 *.log
+xlr-backups/
