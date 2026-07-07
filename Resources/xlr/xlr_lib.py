@@ -179,6 +179,42 @@ def guess_locale(ip):
     return "en"
 
 
+def rcon_say(host, port, password, message):
+    return rcon_query(host, port, password, f"say {message}")
+
+
+def rcon_tell(host, port, password, client_num, message):
+    return rcon_query(host, port, password, f"tell {client_num} {message}")
+
+
+def send_player_welcome(server, client, config):
+    locale = guess_locale(client.get("ip", ""))
+    message = welcome_message(config, locale, client["name"])
+    host = server["host"]
+    port = server["port"]
+    password = server["password"]
+    client_num = client["client_num"]
+    mode = config.get("customization", {}).get("welcome_mode", "both")
+    if mode in ("say", "both"):
+        rcon_say(host, port, password, message)
+    if mode in ("tell", "both"):
+        rcon_tell(host, port, password, client_num, message)
+
+
+def pick_auto_message(config, locale):
+    custom = config.get("customization", {})
+    if locale == "fr":
+        messages = custom.get("auto_messages_fr") or []
+    else:
+        messages = custom.get("auto_messages_en") or []
+    if not messages:
+        messages = custom.get("auto_messages_en") or custom.get("auto_messages_fr") or []
+    if not messages:
+        return ""
+    import random
+    return random.choice(messages)
+
+
 def welcome_message(config, locale, player_name):
     custom = config.get("customization", {})
     invite = custom.get("discord_invite", "discord.gg/63FAj2ZMrN")

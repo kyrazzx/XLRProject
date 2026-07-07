@@ -9,15 +9,16 @@ from xlr_lib import (
     REPORT_CHAT_RE,
     STEAM_RE,
     create_report,
-    guess_locale,
     init_db,
     is_banned,
     load_config,
     connect_db,
     parse_status_clients,
+    pick_auto_message,
     rcon_query,
+    rcon_say,
+    send_player_welcome,
     upsert_player,
-    welcome_message,
     WORKROOT,
 )
 
@@ -95,6 +96,27 @@ def handle_report_line(conn, server_id, line):
     return report_id
 
 
+def player_key(client):
+    guid = client.get("guid") or ""
+    if guid and guid.isdigit():
+        return guid
+    return f"{client['client_num']}:{client['name']}"
+
+
+def maybe_send_auto_message(config, server, state):
+    sid = server["id"]
+    interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
+    now = time.time()
+    last = state.setdefault(sid, {}).get("last_auto_message", 0)
+    if now - last < interval:
+        return
+    message = pick_auto_message(config, "en")
+    if not message:
+        return
+    rcon_say(server["host"], server["port"], server["password"], message)
+    state[sid]["last_auto_message"] = now
+
+
 def process_server(conn, config, server, state):
     sid = server["id"]
     session = state.setdefault(sid, {"sessions": {}, "offsets": {}, "welcomed": set()})
@@ -130,12 +152,11 @@ def process_server(conn, config, server, state):
 
     status = rcon_query(server["host"], server["port"], server["password"], "status")
     for client in parse_status_clients(status):
-        guid = client["guid"]
         name = client["name"]
         ip = client["ip"]
-        if not guid:
-            continue
-        if is_banned(conn, plutonium_id=guid, ip=ip):
+        guid = client.get("guid") or ""
+        plutonium_id = guid if guid.isdigit() else player_key(client)
+        if is_banned(conn, plutonium_id=plutonium_id if guid.isdigit() else None, ip=ip):
             rcon_query(
                 server["host"],
                 server["port"],
@@ -143,19 +164,15 @@ def process_server(conn, config, server, state):
                 f"clientkick {client['client_num']} banned",
             )
             continue
-        upsert_player(conn, guid, name, ip)
-        welcome_key = f"{sid}:{guid}"
+        upsert_player(conn, plutonium_id, name, ip)
+        welcome_key = f"{sid}:{player_key(client)}"
         if welcome_key in session["welcomed"]:
             continue
         session["welcomed"].add(welcome_key)
-        locale = guess_locale(ip)
-        message = welcome_message(config, locale, name)
-        rcon_query(
-            server["host"],
-            server["port"],
-            server["password"],
-            f'tell {client["client_num"]} {message}',
-        )
+        send_player_welcome(server, client, config)
+        print(f"[welcome] {sid}: {name}")
+
+    maybe_send_auto_message(config, server, state)
 
 
 def main():

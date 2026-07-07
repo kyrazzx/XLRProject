@@ -25,6 +25,11 @@ setupCustomization() {
         else
             echo "sets motd \"$motd_en / $motd_fr\"" >> "$mp_main/$cfg"
         fi
+        if grep -q '^seta sv_motd' "$mp_main/$cfg" 2>/dev/null; then
+            sed -i "s|^seta sv_motd.*|seta sv_motd \"$motd_en\"|" "$mp_main/$cfg"
+        else
+            echo "seta sv_motd \"$motd_en\"" >> "$mp_main/$cfg"
+        fi
         if ! grep -q '^set g_allowvote' "$mp_main/$cfg" 2>/dev/null; then
             echo "set g_allowvote 1" >> "$mp_main/$cfg"
         fi
