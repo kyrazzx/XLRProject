@@ -109,7 +109,15 @@ xlr_server_state_file() {
 
 xlr_find_server_pid() {
     local port="$1"
-    pgrep -f "net_port $port" | head -n 1
+    pgrep -f "plutonium-bootstrapper-win32.exe.*net_port $port" | head -n 1
+}
+
+xlr_is_wrapper_running() {
+    local port="$1"
+    pgrep -f "servers/.*/logs/stdout.log" | while read -r pid; do
+        tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q "net_port $port" && echo "$pid" && return 0
+    done
+    pgrep -f "net_port \"$port\"" | head -n 1
 }
 
 xlr_is_server_running() {
@@ -127,8 +135,10 @@ xlr_is_server_running() {
     if [ -f "$pid_file" ]; then
         pid=$(cat "$pid_file" 2>/dev/null)
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            echo "$pid"
-            return 0
+            if xlr_find_server_pid "$port" >/dev/null; then
+                echo "$(xlr_find_server_pid "$port")"
+                return 0
+            fi
         fi
     fi
     return 1
@@ -189,12 +199,24 @@ xlr_build_additional_params() {
     echo "$params"
 }
 
-xlr_get_run_user_home() {
+xlr_get_run_user() {
     if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-        getent passwd "$SUDO_USER" | cut -d: -f6
+        echo "$SUDO_USER"
         return 0
     fi
-    echo "$HOME"
+    if [ "$(id -u)" -eq 0 ]; then
+        local install_owner
+        install_owner=$(stat -c '%U' "$XLR_PLUTONIUM_DIR" 2>/dev/null)
+        if [ -n "$install_owner" ] && [ "$install_owner" != "root" ]; then
+            echo "$install_owner"
+            return 0
+        fi
+    fi
+    id -un
+}
+
+xlr_get_run_user_home() {
+    getent passwd "$(xlr_get_run_user)" | cut -d: -f6
 }
 
 xlr_prepare_bootstrapper() {
@@ -268,10 +290,19 @@ xlr_launch_server_process() {
     fi
 
     local gamesetting_param=""
+    local run_user wine_runner
+    run_user=$(xlr_get_run_user)
+    wine_home=$(xlr_get_run_user_home)
+    if [ "$(id -u)" -eq 0 ] && [ "$run_user" != "root" ]; then
+        wine_runner="runuser -u $run_user --"
+        chown -R "$run_user:$run_user" "$(xlr_get_servers_root "$config_file")/$server_id" 2>/dev/null || true
+    else
+        wine_runner=""
+    fi
 
     xlr_write_log "$log_dir" "$server_id" "Starting $server_name on port $server_port"
 
-    nohup bash -c "
+    nohup $wine_runner bash -c "
         export WINEPREFIX=\"$wine_home/.wine\"
         export WINEDEBUG=\"-all\"
         export WINEARCH=\"win64\"
