@@ -10,8 +10,12 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$BACKUP_ROOT/$STAMP"
 
 usage() {
-    echo "Usage: $0 [--no-configure]"
-    echo "  Updates XLRProject from git and restores local server settings."
+    echo "Usage: $0 [--full-configure]"
+    echo ""
+    echo "  Default: git pull + restore server_config.json and secrets.env only."
+    echo "  Does NOT run generateServerConfig or overwrite dedicated.cfg copies."
+    echo ""
+    echo "  --full-configure  Also run xlr-configure.sh (interactive, destructive cfg regen)."
 }
 
 merge_local_config() {
@@ -30,6 +34,8 @@ merge_local_config() {
         .discord_config.token = "" |
         .monitoring_config.discord_webhook = ($old.monitoring_config.discord_webhook // .monitoring_config.discord_webhook) |
         .customization = ($new.customization * ($old.customization // {})) |
+        .security_hardening = ($new.security_hardening * ($old.security_hardening // {})) |
+        .moderation = ($new.moderation * ($old.moderation // {})) |
         .servers = [
             .servers[] as $srv |
             ($old.servers[]? | select(.id == $srv.id)) as $prev |
@@ -39,7 +45,8 @@ merge_local_config() {
                 .rcon_password = $prev.rcon_password |
                 .enabled = $prev.enabled |
                 .port = $prev.port |
-                .name = ($prev.name // $srv.name)
+                .name = ($prev.name // $srv.name) |
+                .additional_params = ($srv.additional_params * ($prev.additional_params // {}))
             else
                 $srv
             end
@@ -48,9 +55,37 @@ merge_local_config() {
     mv "$tmp_out" "$new_config"
 }
 
-NO_CONFIGURE=0
-if [ "${1:-}" = "--no-configure" ]; then
-    NO_CONFIGURE=1
+sync_install_paths() {
+  local config_file="$1"
+  local workdir="$2"
+  local tmp_out
+
+  tmp_out="$(mktemp)"
+  jq --arg w "$workdir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
+    .general_config.install_dir = ($w + "/Plutonium") |
+    .general_config.game_path_mp = $mp |
+    .general_config.game_path_zm = $zm |
+    .general_config.backup_dir = ($w + "/backups") |
+    .iw4madmin_config.install_dir = ($w + "/IW4MAdmin") |
+    .iw4madmin_config.manual_log_path = ($w + "/Plutonium/storage/t6/logs") |
+    .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
+  ' "$config_file" > "$tmp_out"
+  mv "$tmp_out" "$config_file"
+}
+
+run_light_post_update() {
+    # shellcheck source=/dev/null
+    source "$DEFAULT_DIR/.config/config.sh"
+    # shellcheck source=/dev/null
+    source "$DEFAULT_DIR/.config/xlr/setupCustomization.sh" --import
+    setupCustomization
+}
+
+FULL_CONFIGURE=0
+if [ "${1:-}" = "--full-configure" ]; then
+    FULL_CONFIGURE=1
+elif [ "${1:-}" = "--no-configure" ]; then
+    :
 elif [ -n "${1:-}" ]; then
     usage
     exit 1
@@ -74,15 +109,14 @@ fi
 
 cd "$DEFAULT_DIR"
 git fetch origin
+git reset --hard origin/main
+git pull --ff-only origin main
 
 if [ -f "$BACKUP_DIR/server_config.json" ]; then
-    git reset --hard origin/main
-    git pull --ff-only origin main
     merge_local_config "$CONFIG_FILE" "$BACKUP_DIR/server_config.json"
-else
-    git reset --hard origin/main
-    git pull --ff-only origin main
 fi
+
+sync_install_paths "$CONFIG_FILE" "$DEFAULT_DIR"
 
 if [ -f "$BACKUP_DIR/secrets.env" ]; then
     sudo mkdir -p /etc/xlr
@@ -102,7 +136,11 @@ chmod +x "$DEFAULT_DIR/install-plutonium.sh" 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/import-game-files.sh" 2>/dev/null || true
 find "$DEFAULT_DIR/Plutonium" -maxdepth 2 -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
-if [ "$NO_CONFIGURE" -eq 0 ] && [ -x "$DEFAULT_DIR/xlr-configure.sh" ]; then
+run_light_post_update
+
+if [ "$FULL_CONFIGURE" -eq 1 ]; then
+    echo ""
+    echo "Running full xlr-configure (may overwrite dedicated.cfg from template)..."
     if [ "$EUID" -eq 0 ]; then
         "$DEFAULT_DIR/xlr-configure.sh"
     else
@@ -113,6 +151,9 @@ fi
 echo ""
 echo "Update complete."
 echo "Backup saved in: $BACKUP_DIR"
+echo ""
+echo "Verify keys and enabled servers:"
+echo "  jq '.servers[] | {id, enabled, key: .key[0:6]}' $CONFIG_FILE"
 echo ""
 echo "Restart game servers without sudo:"
 echo "  cd $DEFAULT_DIR/Plutonium && ./XLRManager.sh restart all"
