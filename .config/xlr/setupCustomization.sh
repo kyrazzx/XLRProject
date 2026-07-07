@@ -38,6 +38,14 @@ setupCustomization() {
     jq --arg invite "$invite" '
         .customization.discord_invite = $invite
     ' "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
+
+    local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
+    local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
+    mkdir -p "$gsc_dest"
+    if [ -f "$gsc_src" ]; then
+        cp "$gsc_src" "$gsc_dest/xlr_messages.gsc"
+        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_dest/xlr_messages.gsc"
+    fi
 }
 
 if [ "$1" = "--import" ]; then
