@@ -6,6 +6,7 @@ import re
 import socket
 import sqlite3
 import subprocess
+import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -119,17 +120,21 @@ def init_db(conn):
 def rcon_query(host, port, password, command):
     payload = f"\xff\xff\xff\xffrcon {password} {command}".encode("latin-1", errors="ignore")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(2.5)
+    sock.settimeout(0.4)
+    chunks = []
     try:
         sock.sendto(payload, (host, int(port)))
-        data, _ = sock.recvfrom(8192)
-        if len(data) > 4:
-            return data[4:].decode("latin-1", errors="ignore")
-    except OSError:
-        return ""
+        deadline = time.time() + 2.5
+        while time.time() < deadline:
+            try:
+                data, _ = sock.recvfrom(8192)
+            except OSError:
+                break
+            if len(data) > 4:
+                chunks.append(data[4:].decode("latin-1", errors="ignore"))
     finally:
         sock.close()
-    return ""
+    return "".join(chunks)
 
 
 def parse_status_clients(status_text):
@@ -150,8 +155,10 @@ def parse_status_clients(status_text):
         guid = parts[3].replace("^7", "").replace("'", "").strip()
         name = parts[4].replace("^7", "").replace("'", "").strip()
         ip = ""
-        if len(parts) >= 6:
-            ip = parts[-1].split(":")[0]
+        for part in reversed(parts[5:]):
+            if ":" in part:
+                ip = part.split(":")[0].strip()
+                break
         clients.append(
             {
                 "client_num": client_num,
@@ -161,6 +168,46 @@ def parse_status_clients(status_text):
             }
         )
     return clients
+
+
+def resolve_ips_from_conntrack(port):
+    ips = []
+    commands = (
+        ["conntrack", "-L", "-p", "udp", "--dport", str(port)],
+        ["conntrack", "-L", "-p", "udp", "--sport", str(port)],
+    )
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            continue
+        if result.returncode != 0:
+            continue
+        for line in (result.stdout or "").splitlines():
+            match = re.search(r"src=(\d+\.\d+\.\d+\.\d+)", line)
+            if not match:
+                continue
+            ip = match.group(1)
+            if ip not in ips:
+                ips.append(ip)
+    if ips:
+        return ips
+    proc_path = Path("/proc/net/nf_conntrack")
+    if not proc_path.is_file():
+        return ips
+    port_token = f"dport={int(port)}"
+    try:
+        for line in proc_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if port_token not in line:
+                continue
+            match = re.search(r"src=(\d+\.\d+\.\d+\.\d+)", line)
+            if match:
+                ip = match.group(1)
+                if ip not in ips:
+                    ips.append(ip)
+    except OSError:
+        pass
+    return ips
 
 
 def guess_locale(ip):
@@ -346,5 +393,7 @@ def lookup_player(conn, query):
 
 CONNECT_RE = re.compile(r"client\s+'([^']+)'\s+connected", re.I)
 AUTH_RE = re.compile(r"User with id\s+(\d+)\s+successfully authenticated", re.I)
+LET_PLAYER_RE = re.compile(r"Letting player with userid\s+(\d+)", re.I)
+CLIENT_ENDPOINT_RE = re.compile(r"'(\d{1,3}(?:\.\d{1,3}){3}):\d+'")
 STEAM_RE = re.compile(r"steam(?:_id)?[:=\s]+(\d+)", re.I)
 REPORT_CHAT_RE = re.compile(r"!report\s+(\S+)(?:\s+(.*))?", re.I)

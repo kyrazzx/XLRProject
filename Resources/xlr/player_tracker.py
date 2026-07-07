@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
+import json
 import time
 from pathlib import Path
 
 from xlr_lib import (
     AUTH_RE,
+    CLIENT_ENDPOINT_RE,
     CONNECT_RE,
+    LET_PLAYER_RE,
     REPORT_CHAT_RE,
     STEAM_RE,
     create_report,
@@ -17,10 +20,13 @@ from xlr_lib import (
     pick_auto_message,
     rcon_query,
     rcon_say,
+    resolve_ips_from_conntrack,
     send_player_welcome,
     upsert_player,
     WORKROOT,
 )
+
+OFFSET_STATE_PATH = WORKROOT / "Plutonium" / "storage" / "xlr" / "tracker_offsets.json"
 
 
 def enabled_servers(config):
@@ -47,6 +53,32 @@ def enabled_servers(config):
             / "logs"
             / server.get("log_file", ""),
         }
+
+
+def load_offset_state():
+    if not OFFSET_STATE_PATH.is_file():
+        return {}
+    try:
+        return json.loads(OFFSET_STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_offset_state(offsets):
+    OFFSET_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OFFSET_STATE_PATH.write_text(json.dumps(offsets, indent=2), encoding="utf-8")
+
+
+def resolve_log_offset(path, saved_offset):
+    path = Path(path)
+    if not path.is_file():
+        return 0
+    size = path.stat().st_size
+    if saved_offset is None:
+        return size
+    if saved_offset > size:
+        return 0
+    return saved_offset
 
 
 def tail_file(path, offset):
@@ -117,69 +149,129 @@ def maybe_send_auto_message(config, server, state):
     state[sid]["last_auto_message"] = now
 
 
-def upsert_session_player(conn, session, entry):
+def take_pending_ip(session):
+    queue = session.get("pending_ips", [])
+    assigned = session.setdefault("assigned_ips", set())
+    while queue:
+        ip = queue.pop(0)
+        if ip not in assigned:
+            assigned.add(ip)
+            return ip
+    return ""
+
+
+def resolve_session_ip(session, server, entry, allow_conntrack=True):
+    if entry.get("ip"):
+        return entry["ip"]
+    ip = take_pending_ip(session)
+    if ip:
+        entry["ip"] = ip
+        return ip
+    if not allow_conntrack:
+        return ""
+    assigned = session.setdefault("assigned_ips", set())
+    for candidate in resolve_ips_from_conntrack(server["port"]):
+        if candidate not in assigned:
+            assigned.add(candidate)
+            entry["ip"] = candidate
+            return candidate
+    return ""
+
+
+def upsert_session_player(conn, session, server, entry, allow_conntrack=True):
     plutonium_id = entry.get("plutonium_id") or ""
     name = entry.get("name") or ""
     if not plutonium_id or not name:
         return
+    ip = resolve_session_ip(session, server, entry, allow_conntrack=allow_conntrack)
     upsert_player(
         conn,
         plutonium_id,
         name,
-        entry.get("ip") or "",
+        ip,
         entry.get("steam_id"),
     )
     upsert_key = f"{plutonium_id}:{name}"
     if upsert_key not in session.get("logged", set()):
         session.setdefault("logged", set()).add(upsert_key)
-        print(f"[player] saved {name} ({plutonium_id})")
+        ip_note = f" ip={ip}" if ip else ""
+        print(f"[player] saved {name} ({plutonium_id}){ip_note}")
 
 
-def process_server(conn, config, server, state):
+def process_server(conn, config, server, state, offset_state):
     sid = server["id"]
     session = state.setdefault(
         sid,
-        {"sessions": {}, "offsets": {}, "welcomed": set(), "logged": set(), "unlinked_names": []},
+        {
+            "sessions": {},
+            "welcomed": set(),
+            "logged": set(),
+            "pending_ips": [],
+            "assigned_ips": set(),
+            "awaiting_connect": None,
+        },
     )
 
     for path_key in ("stdout_log", "game_log"):
-        offset = session["offsets"].get(path_key, 0)
-        offset, lines = tail_file(server[path_key], offset)
-        session["offsets"][path_key] = offset
+        path = server[path_key]
+        state_key = f"{sid}:{path_key}"
+        saved_offset = offset_state.get(state_key)
+        offset = resolve_log_offset(path, saved_offset)
+        offset, lines = tail_file(path, offset)
+        offset_state[state_key] = offset
         for line in lines:
+            endpoint = CLIENT_ENDPOINT_RE.search(line)
+            if endpoint:
+                session.setdefault("pending_ips", []).append(endpoint.group(1))
+
             auth = AUTH_RE.search(line)
             if auth:
                 pid = auth.group(1)
-                entry = session["sessions"].setdefault(
+                session["sessions"].setdefault(
                     pid,
                     {"plutonium_id": pid, "name": "", "steam_id": None, "ip": ""},
                 )
-                entry["plutonium_id"] = pid
-                if session["unlinked_names"]:
-                    entry["name"] = session["unlinked_names"].pop(0)
-                upsert_session_player(conn, session, entry)
+                session["awaiting_connect"] = pid
+
+            let_player = LET_PLAYER_RE.search(line)
+            if let_player:
+                pid = let_player.group(1)
+                session["sessions"].setdefault(
+                    pid,
+                    {"plutonium_id": pid, "name": "", "steam_id": None, "ip": ""},
+                )
+                session["awaiting_connect"] = pid
+                entry = session["sessions"][pid]
+                if not entry.get("ip"):
+                    ip = take_pending_ip(session)
+                    if ip:
+                        entry["ip"] = ip
 
             connect = CONNECT_RE.search(line)
             if connect:
                 name = connect.group(1)
-                linked = False
-                for entry in session["sessions"].values():
-                    if entry.get("plutonium_id") and not entry.get("name"):
-                        entry["name"] = name
-                        upsert_session_player(conn, session, entry)
-                        linked = True
-                        break
-                if not linked:
-                    session["unlinked_names"].append(name)
+                pid = session.get("awaiting_connect")
+                if pid and pid in session["sessions"]:
+                    entry = session["sessions"][pid]
+                    entry["name"] = name
+                    upsert_session_player(conn, session, server, entry, allow_conntrack=True)
+                session["awaiting_connect"] = None
 
             steam = STEAM_RE.search(line)
             if steam:
                 steam_id = steam.group(1)
-                for entry in session["sessions"].values():
-                    if not entry.get("steam_id"):
-                        entry["steam_id"] = steam_id
-                        if entry.get("plutonium_id") and entry.get("name"):
-                            upsert_session_player(conn, session, entry)
+                pid = session.get("awaiting_connect")
+                if pid and pid in session["sessions"]:
+                    entry = session["sessions"][pid]
+                    entry["steam_id"] = steam_id
+                    if entry.get("name"):
+                        upsert_session_player(
+                            conn,
+                            session,
+                            server,
+                            entry,
+                            allow_conntrack=False,
+                        )
 
             if handle_report_line(conn, sid, line):
                 print(f"[report] new in-game report on {sid}")
@@ -190,6 +282,13 @@ def process_server(conn, config, server, state):
         ip = client["ip"]
         guid = client.get("guid") or ""
         plutonium_id = guid if guid.isdigit() else player_key(client)
+        if guid.isdigit():
+            entry = session["sessions"].setdefault(
+                guid,
+                {"plutonium_id": guid, "name": name, "steam_id": None, "ip": ip},
+            )
+            if ip:
+                entry["ip"] = ip
         if is_banned(conn, plutonium_id=plutonium_id if guid.isdigit() else None, ip=ip):
             rcon_query(
                 server["host"],
@@ -213,13 +312,15 @@ def main():
     conn = connect_db()
     init_db(conn)
     state = {}
+    offset_state = load_offset_state()
     while True:
         config = load_config()
         for server in enabled_servers(config):
             try:
-                process_server(conn, config, server, state)
+                process_server(conn, config, server, state, offset_state)
             except Exception as exc:
                 print(f"[player_tracker] {server['id']}: {exc}")
+        save_offset_state(offset_state)
         time.sleep(2)
 
 
