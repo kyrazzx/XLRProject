@@ -92,10 +92,15 @@ fi
 
 chmod +x "$DEFAULT_DIR/Plutonium/XLRManager.sh" 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/Plutonium/lib/server_core.sh" 2>/dev/null || true
+chmod +x "$DEFAULT_DIR/Plutonium/start_server_and_monitoring.sh" 2>/dev/null || true
+chmod +x "$DEFAULT_DIR/Plutonium/T6Server.sh" 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/.config/xlr/"*.sh 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/.config/security/"*.sh 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/xlr-configure.sh" 2>/dev/null || true
 chmod +x "$DEFAULT_DIR/xlr-update.sh" 2>/dev/null || true
+chmod +x "$DEFAULT_DIR/install-plutonium.sh" 2>/dev/null || true
+chmod +x "$DEFAULT_DIR/import-game-files.sh" 2>/dev/null || true
+find "$DEFAULT_DIR/Plutonium" -maxdepth 2 -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 
 if [ "$NO_CONFIGURE" -eq 0 ] && [ -x "$DEFAULT_DIR/xlr-configure.sh" ]; then
     if [ "$EUID" -eq 0 ]; then
