@@ -19,7 +19,55 @@ xlr_resolve_config() {
 
 xlr_get_install_dir() {
     local config_file="$1"
-    jq -r '.general_config.install_dir // "/opt/T6Server/Plutonium"' "$config_file"
+    local configured
+    configured=$(jq -r '.general_config.install_dir // ""' "$config_file")
+    if [ -n "$configured" ] && [ "$configured" != "null" ] && [ -f "$configured/bin/plutonium-bootstrapper-win32.exe" ]; then
+        echo "$configured"
+        return 0
+    fi
+    echo "$XLR_PLUTONIUM_DIR"
+}
+
+xlr_get_workdir() {
+    local config_file="$1"
+    dirname "$(xlr_get_install_dir "$config_file")"
+}
+
+xlr_sync_config_paths() {
+    local config_file="$1"
+    local workdir plutonium_dir
+    workdir=$(xlr_get_workdir "$config_file")
+    plutonium_dir="$XLR_PLUTONIUM_DIR"
+    if [ ! -f "$config_file" ]; then
+        return 1
+    fi
+    jq --arg w "$workdir" --arg pd "$plutonium_dir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
+        .general_config.install_dir = $pd |
+        .general_config.game_path_mp = $mp |
+        .general_config.game_path_zm = $zm |
+        .general_config.backup_dir = ($w + "/backups") |
+        .iw4madmin_config.install_dir = ($w + "/IW4MAdmin") |
+        .iw4madmin_config.manual_log_path = ($pd + "/storage/t6/logs") |
+        .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
+    ' "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
+}
+
+xlr_resolve_game_path() {
+    local config_file="$1"
+    local server_config="$2"
+    local game_path mode workdir
+    game_path=$(echo "$server_config" | jq -r '.game_path // ""')
+    mode=$(echo "$server_config" | jq -r '.mode')
+    workdir=$(xlr_get_workdir "$config_file")
+    if [ -n "$game_path" ] && [ "$game_path" != "null" ] && [ -d "$game_path" ]; then
+        echo "$game_path"
+        return 0
+    fi
+    if [ "$mode" = "t6zm" ]; then
+        echo "$workdir/Server/Zombie"
+    else
+        echo "$workdir/Server/Multiplayer"
+    fi
 }
 
 xlr_get_servers_root() {
@@ -189,8 +237,8 @@ xlr_launch_server_process() {
     stdout_log="$log_dir/stdout.log"
     mkdir -p "$log_dir"
 
-    if [ -z "$game_path" ] || [ "$game_path" = "null" ]; then
-        game_path=$(jq -r --arg mode "$game_mode" 'if $mode == "t6zm" then .general_config.game_path_zm else .general_config.game_path_mp end' "$config_file")
+    if [ -z "$game_path" ] || [ "$game_path" = "null" ] || [ ! -d "$game_path" ]; then
+        game_path=$(xlr_resolve_game_path "$config_file" "$server_config")
     fi
 
     cd "$install_dir" || return 1
@@ -260,7 +308,7 @@ xlr_stop_server() {
     fi
 
     pkill -f "net_port $port" 2>/dev/null
-    echo "stopped" > "$(xlr_server_state_file "$config_file" "$server_id")"
+    echo "stopped" > "$(xlr_server_state_file "$config_file" "$server_id")" 2>/dev/null || true
     xlr_write_log "$log_dir" "$server_id" "Server stopped"
 }
 

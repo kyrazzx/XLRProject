@@ -242,6 +242,8 @@ xlr_main() {
         exit 1
     fi
 
+    xlr_sync_config_paths "$config_file"
+
     case "$command" in
         start)
             xlr_foreach_server "$config_file" "$target" xlr_cmd_start_one
