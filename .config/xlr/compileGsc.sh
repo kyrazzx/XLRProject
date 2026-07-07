@@ -89,19 +89,26 @@ xlr_compile_gsc_file() {
     mkdir -p "$(dirname "$dest_file")" "$(dirname "$log_file")"
     rm -rf "$workdir/compiled"
 
-    local build_dir
+    local build_dir base_name
     build_dir="$(dirname "$source_file")"
+    base_name="$(basename "$source_file")"
     echo "[XLR] Compiling with $gsc_tool ..." >&2
     (
         cd "$build_dir" || exit 1
-        "$gsc_tool" -m comp -g t6 -s pc "$(basename "$source_file")"
+        "$gsc_tool" -m comp -g t6 -s pc "$base_name"
     ) >"$log_file" 2>&1 || {
         echo "[XLR] ERROR: gsc-tool compile failed — see $log_file" >&2
         tail -20 "$log_file" >&2 || true
         return 1
     }
 
-    compiled_out="$workdir/compiled/t6/$(basename "$source_file")"
+    compiled_out="$build_dir/compiled/t6/$base_name"
+    if [ ! -f "$compiled_out" ]; then
+        compiled_out="$workdir/compiled/t6/$base_name"
+    fi
+    if [ ! -f "$compiled_out" ]; then
+        compiled_out="$(find "$build_dir" "$workdir" -type f -path "*/compiled/t6/$base_name" 2>/dev/null | head -1)"
+    fi
     if [ ! -f "$compiled_out" ]; then
         echo "[XLR] ERROR: expected compiled output at $compiled_out" >&2
         tail -20 "$log_file" >&2 || true
@@ -109,7 +116,7 @@ xlr_compile_gsc_file() {
     fi
 
     cp "$compiled_out" "$dest_file"
-    rm -rf "$workdir/compiled"
+    rm -rf "$build_dir/compiled" "$workdir/compiled"
 
     if ! xlr_gsc_looks_compiled "$dest_file"; then
         echo "[XLR] ERROR: deploy file is still source text, not compiled binary" >&2
