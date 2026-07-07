@@ -144,8 +144,26 @@ xlr_build_additional_params() {
 xlr_update_plutonium() {
     local install_dir="$1"
     if [ -x "$install_dir/plutonium-updater" ]; then
+        mkdir -p "$install_dir/logs"
         "$install_dir/plutonium-updater" -d "$install_dir" >> "$install_dir/logs/updater.log" 2>&1 || true
     fi
+}
+
+xlr_ensure_plutonium_bootstrapper() {
+    local install_dir="$1"
+    local bootstrapper="$install_dir/bin/plutonium-bootstrapper-win32.exe"
+
+    if [ -f "$bootstrapper" ]; then
+        return 0
+    fi
+
+    if [ ! -x "$install_dir/plutonium-updater" ]; then
+        return 1
+    fi
+
+    mkdir -p "$install_dir/logs"
+    "$install_dir/plutonium-updater" -d "$install_dir" >> "$install_dir/logs/updater.log" 2>&1
+    [ -f "$bootstrapper" ]
 }
 
 xlr_launch_server_process() {
@@ -177,10 +195,12 @@ xlr_launch_server_process() {
 
     cd "$install_dir" || return 1
 
-    local gamesetting_param=""
-    if [ -n "$gamesetting" ] && [ "$gamesetting" != "null" ]; then
-        gamesetting_param="+exec $gamesetting"
+    if ! xlr_ensure_plutonium_bootstrapper "$install_dir"; then
+        xlr_write_log "$log_dir" "$server_id" "Missing plutonium-bootstrapper-win32.exe - run: ./install-plutonium.sh"
+        return 1
     fi
+
+    local gamesetting_param=""
 
     xlr_write_log "$log_dir" "$server_id" "Starting $server_name on port $server_port"
 

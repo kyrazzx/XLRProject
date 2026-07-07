@@ -31,5 +31,10 @@ if [ ! -f "$WORKDIR/Plutonium/plutonium-updater" ]; then
     chmod +x plutonium-updater
 fi
 
+if [ ! -f "$WORKDIR/Plutonium/bin/plutonium-bootstrapper-win32.exe" ]; then
+    mkdir -p "$WORKDIR/Plutonium/logs"
+    "$WORKDIR/Plutonium/plutonium-updater" -d "$WORKDIR/Plutonium" >> "$WORKDIR/Plutonium/logs/updater.log" 2>&1
+fi
+
 printf "\n${COLORS[GREEN]}Game files linked successfully.${COLORS[RESET]}\n"
 printf "Continue with: sudo ./install.sh (skip torrent) or sudo ./xlr-configure.sh\n"

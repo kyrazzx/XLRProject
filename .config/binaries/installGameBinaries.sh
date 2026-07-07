@@ -57,6 +57,11 @@ installGameBinaries() {
             chmod +x plutonium-updater
         fi
 
+        if [ ! -f "$WORKDIR/Plutonium/bin/plutonium-bootstrapper-win32.exe" ]; then
+            mkdir -p "$WORKDIR/Plutonium/logs"
+            "$WORKDIR/Plutonium/plutonium-updater" -d "$WORKDIR/Plutonium" >> "$WORKDIR/Plutonium/logs/updater.log" 2>&1
+        fi
+
         chmod +x "$WORKDIR/Plutonium/T6Server.sh"
         chmod +x "$WORKDIR/Plutonium/XLRManager.sh" 2>/dev/null || true
         chmod +x "$WORKDIR/Plutonium/start_server_and_monitoring.sh" 2>/dev/null || true
@@ -69,9 +74,11 @@ installGameBinaries() {
     } > "$log_file" 2>&1 &
     showProgressIndicator "$(getMessage "binary")"
 
-    if [ ! -f "$WORKDIR/Plutonium/plutonium-updater" ] || ! manualGameFilesReady; then
+    if [ ! -f "$WORKDIR/Plutonium/bin/plutonium-bootstrapper-win32.exe" ] || ! manualGameFilesReady; then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} Game binaries installation failed.\n"
         printf "Log: %s\n" "$log_file"
+        printf "Plutonium log: %s/Plutonium/logs/updater.log\n" "$WORKDIR"
+        printf "Run: sudo ./install-plutonium.sh\n"
         printf "Manual upload help: %s/Resources/binaries/MANUAL_UPLOAD.txt\n" "$WORKDIR"
         printf "Retry: sudo ./import-game-files.sh\n"
     fi

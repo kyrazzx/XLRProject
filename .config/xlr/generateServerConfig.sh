@@ -90,14 +90,15 @@ generateServerConfig() {
     fi
 
     if [ -f "$template_config" ]; then
-        jq --arg workdir "$workdir" '
+        jq --arg workdir "$workdir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
             .general_config.install_dir = ($workdir + "/Plutonium") |
-            .general_config.game_path_mp = ($workdir + "/Server/Multiplayer") |
-            .general_config.game_path_zm = ($workdir + "/Server/Zombie") |
+            .general_config.game_path_mp = $mp |
+            .general_config.game_path_zm = $zm |
             .general_config.backup_dir = ($workdir + "/backups") |
             .iw4madmin_config.install_dir = ($workdir + "/IW4MAdmin") |
             .iw4madmin_config.manual_log_path = ($workdir + "/Plutonium/storage/t6/logs") |
             .servers = (.servers | map(
+                .game_path = (if .mode == "t6zm" then $zm else $mp end) |
                 if .id == "ffa" then
                     .gamesetting = "dm.cfg" | .gametype = "dm" | .log_file = "games_mp_ffa.log"
                 elif .id == "tdm" then
