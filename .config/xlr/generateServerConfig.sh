@@ -69,11 +69,11 @@ generateServerConfig() {
         cp "$mp_main/dedicated.cfg" "$mp_main/dedicated_tdm.cfg"
         cp "$mp_main/dedicated.cfg" "$mp_main/dedicated_gungame.cfg"
 
-        xlr_patch_dedicated_cfg "$mp_main/dedicated_ffa.cfg" "XLR FFA" \
+        xlr_patch_dedicated_cfg "$mp_main/dedicated_ffa.cfg" "XLR | FFA EU" \
             "execgts dm.cfg $map_pool" "games_mp_ffa.log" "$rcon"
-        xlr_patch_dedicated_cfg "$mp_main/dedicated_tdm.cfg" "XLR TDM" \
+        xlr_patch_dedicated_cfg "$mp_main/dedicated_tdm.cfg" "XLR | TDM EU" \
             "execgts tdm.cfg $map_pool" "games_mp_tdm.log" "$rcon"
-        xlr_patch_dedicated_cfg "$mp_main/dedicated_gungame.cfg" "XLR Gun Game" \
+        xlr_patch_dedicated_cfg "$mp_main/dedicated_gungame.cfg" "XLR | Gun Game EU" \
             "execgts gun.cfg $map_pool" "games_mp_gungame.log" "$rcon"
     fi
 

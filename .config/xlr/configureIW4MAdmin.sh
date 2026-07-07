@@ -21,14 +21,16 @@ configureIW4MAdmin() {
     parser_mp="Call of Duty Multiplayer - Ship COD_T6_S MP build 1.0.44 CL(1759941) CODPCAB2 CEG Fri May 9 19:19:19 2014 win-x86 813e66d5"
     parser_zm="Call of Duty - Ship COD_T6_S ZM build 1.0.44 CL(1759941) CODPCAB2 CEG Fri May 9 19:19:19 2014 win-x86 813e66d5"
 
-    local servers_json
-    servers_json=$(jq -c --arg ip "$rcon_ip" --arg parser_mp "$parser_mp" --arg parser_zm "$parser_zm" --arg log_base "$log_base" '
+    local servers_json auto_en auto_fr
+    auto_en=$(jq -c '.customization.auto_messages_en // []' "$config_file")
+    auto_fr=$(jq -c '.customization.auto_messages_fr // []' "$config_file")
+    servers_json=$(jq -c --arg ip "$rcon_ip" --arg parser_mp "$parser_mp" --arg parser_zm "$parser_zm" --arg log_base "$log_base" --argjson auto_en "$auto_en" --argjson auto_fr "$auto_fr" '
         [.servers[] | select(.enabled == true) | {
             IPAddress: $ip,
             Port: .port,
             Password: (.rcon_password // .key),
             Rules: [],
-            AutoMessages: [],
+            AutoMessages: ($auto_en + $auto_fr),
             ManualLogPath: (if (.log_file | length) > 0 then ($log_base + "/" + .log_file) else null end),
             RConParserVersion: (if .mode == "t6zm" then $parser_zm else $parser_mp end),
             EventParserVersion: (if .mode == "t6zm" then $parser_zm else $parser_mp end),

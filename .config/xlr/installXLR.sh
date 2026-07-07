@@ -25,8 +25,13 @@ installXLRStack() {
     fi
 
     if [[ "${xlr_discord:-}" =~ ^[yYoO]$ ]]; then
-        installDiscordBot
+        jq '.discord_config.enabled = true' "$WORKDIR/Plutonium/server_config.json" > "$WORKDIR/Plutonium/server_config.json.tmp" \
+            && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
     fi
+
+    installXlrPython 2>/dev/null || true
+    setupDdosProtection "$WORKDIR/Plutonium/server_config.json" 2>/dev/null || true
+    setupCustomization 2>/dev/null || true
 
     setupSystemdServices
 

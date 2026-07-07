@@ -8,6 +8,33 @@
         "rcon_ip": "127.0.0.1",
         "backup_dir": "/opt/T6Server/backups"
     },
+    "security_hardening": {
+        "enabled": true,
+        "sysctl_tuning": true,
+        "rate_limit_enabled": true,
+        "rate_limit_pps": 800,
+        "rate_limit_burst": 400
+    },
+    "customization": {
+        "discord_invite": "discord.gg/63FAj2ZMrN",
+        "welcome_chat_en": "^5[XLR]^7 Welcome {player}! Discord: {discord} | Report: !report <player> <reason>",
+        "welcome_chat_fr": "^5[XLR]^7 Bienvenue {player} ! Discord : {discord} | Report : !report <joueur> <raison>",
+        "motd_en": "^5XLR EU^7 — Fast, DDoS-protected BO2 servers",
+        "motd_fr": "^5XLR EU^7 — Serveurs BO2 rapides, proteges anti-DDoS",
+        "auto_messages_en": [
+            "^5[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN",
+            "^5[XLR]^7 Report cheaters in chat: !report <player> <reason>"
+        ],
+        "auto_messages_fr": [
+            "^5[XLR]^7 Rejoins le Discord : discord.gg/63FAj2ZMrN",
+            "^5[XLR]^7 Signale les tricheurs : !report <joueur> <raison>"
+        ]
+    },
+    "moderation": {
+        "players_db": "Plutonium/storage/xlr/players.db",
+        "discord_reports_channel_id": "",
+        "ingame_report_command": "!report"
+    },
     "restart_config": {
         "idle_hours": 2,
         "enabled": true
@@ -20,6 +47,7 @@
             "Plutonium/storage/t6/stats",
             "Plutonium/storage/t6/players",
             "Plutonium/storage/t6/logs",
+            "Plutonium/storage/xlr",
             "Plutonium/servers",
             "Server/Multiplayer/main",
             "Server/Zombie/main",
@@ -36,6 +64,7 @@
         "enabled": false,
         "token": "",
         "status_channel_id": "",
+        "reports_channel_id": "",
         "guild_id": "",
         "update_interval": 60
     },
@@ -48,7 +77,7 @@
     "servers": [
         {
             "id": "ffa",
-            "name": "XLR FFA",
+            "name": "XLR | FFA EU",
             "enabled": true,
             "port": 28960,
             "mode": "t6mp",
@@ -62,16 +91,17 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 0
+                "sv_pure": 0,
+                "sv_anticheat": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 80,
-                "max_memory_mb": 3072
+                "max_cpu_percent": 70,
+                "max_memory_mb": 1400
             }
         },
         {
             "id": "tdm",
-            "name": "XLR TDM",
+            "name": "XLR | TDM EU",
             "enabled": true,
             "port": 28961,
             "mode": "t6mp",
@@ -85,17 +115,18 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 0
+                "sv_pure": 0,
+                "sv_anticheat": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 80,
-                "max_memory_mb": 3072
+                "max_cpu_percent": 70,
+                "max_memory_mb": 1400
             }
         },
         {
             "id": "gungame",
-            "name": "XLR Gun Game",
-            "enabled": true,
+            "name": "XLR | Gun Game EU",
+            "enabled": false,
             "port": 28962,
             "mode": "t6mp",
             "game_path": "",
@@ -108,16 +139,17 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 0
+                "sv_pure": 0,
+                "sv_anticheat": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 80,
-                "max_memory_mb": 3072
+                "max_cpu_percent": 70,
+                "max_memory_mb": 1400
             }
         },
         {
             "id": "zombies",
-            "name": "XLR Zombies",
+            "name": "XLR | Zombies EU",
             "enabled": false,
             "port": 28963,
             "mode": "t6zm",
@@ -133,8 +165,8 @@
                 "sv_pure": 0
             },
             "resource_limits": {
-                "max_cpu_percent": 80,
-                "max_memory_mb": 3072
+                "max_cpu_percent": 70,
+                "max_memory_mb": 1400
             }
         }
     ]

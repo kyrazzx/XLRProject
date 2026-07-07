@@ -97,29 +97,48 @@ WantedBy=multi-user.target
 EOF
     fi
 
-    if [ -f "$workdir/Resources/discord/venv/bin/python" ]; then
-        local discord_enabled discord_token
+    if [ -f "$workdir/Resources/xlr/venv/bin/python" ]; then
+        local discord_enabled
         discord_enabled=$(jq -r '.discord_config.enabled // false' "$config_file" 2>/dev/null)
-        discord_token=$(jq -r '.discord_config.token // ""' "$config_file" 2>/dev/null)
-        if [ "$discord_enabled" = "true" ] && [ -n "$discord_token" ] && [ "$discord_token" != "null" ]; then
+        if [ "$discord_enabled" = "true" ]; then
             cat > /etc/systemd/system/xlr-discord-bot.service << EOF
 [Unit]
 Description=XLR Discord Bot
-After=network.target
+After=network.target xlr-player-tracker.service
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$workdir/Resources/discord
-ExecStart=$workdir/Resources/discord/venv/bin/python $workdir/Resources/discord/xlr_bot.py
+WorkingDirectory=$workdir/Resources/xlr
+ExecStart=$workdir/Resources/xlr/venv/bin/python $workdir/Resources/xlr/xlr_bot.py
 Restart=on-failure
 RestartSec=15
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/xlr/secrets.env
 
 [Install]
 WantedBy=multi-user.target
 EOF
         fi
+
+        cat > /etc/systemd/system/xlr-player-tracker.service << EOF
+[Unit]
+Description=XLR Player Tracker and Moderation
+After=network.target xlr-manager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$workdir/Resources/xlr
+ExecStart=$workdir/Resources/xlr/venv/bin/python $workdir/Resources/xlr/player_tracker.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/xlr/secrets.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
     fi
 
     cat > /etc/systemd/system/xlr-healthcheck.service << EOF
@@ -148,6 +167,7 @@ EOF
     systemctl daemon-reload
     systemctl enable xlr-manager.service xlr-backup.timer xlr-scheduled-restart.timer xlr-healthcheck.timer 2>/dev/null || true
     systemctl enable xlr-iw4madmin.service 2>/dev/null || true
+    systemctl enable xlr-player-tracker.service 2>/dev/null || true
     systemctl enable xlr-discord-bot.service 2>/dev/null || true
 }
 

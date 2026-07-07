@@ -12,6 +12,10 @@ fi
 promptServerCredentials
 generateServerConfig
 applyServerCredentials
+setupSecurityConfig 2>/dev/null || true
+setupDdosProtection "$DEFAULT_DIR/Plutonium/server_config.json" 2>/dev/null || true
+setupCustomization
+installXlrPython
 configureIW4MAdmin
 setupSystemdServices
 

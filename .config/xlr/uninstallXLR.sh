@@ -5,8 +5,8 @@ if [ "$1" = "--install" ]; then
 fi
 
 uninstallXLR() {
-    systemctl stop xlr-manager.service xlr-iw4madmin.service xlr-discord-bot.service 2>/dev/null || true
-    systemctl disable xlr-manager.service xlr-iw4madmin.service xlr-discord-bot.service 2>/dev/null || true
+    systemctl stop xlr-manager.service xlr-iw4madmin.service xlr-discord-bot.service xlr-player-tracker.service 2>/dev/null || true
+    systemctl disable xlr-manager.service xlr-iw4madmin.service xlr-discord-bot.service xlr-player-tracker.service 2>/dev/null || true
     systemctl disable xlr-backup.timer xlr-scheduled-restart.timer 2>/dev/null || true
 
     rm -f /etc/systemd/system/xlr-manager.service
@@ -16,6 +16,7 @@ uninstallXLR() {
     rm -f /etc/systemd/system/xlr-scheduled-restart.timer
     rm -f /etc/systemd/system/xlr-iw4madmin.service
     rm -f /etc/systemd/system/xlr-discord-bot.service
+    rm -f /etc/systemd/system/xlr-player-tracker.service
     systemctl daemon-reload 2>/dev/null || true
 
     if [ -x "${WORKDIR}/Plutonium/XLRManager.sh" ]; then

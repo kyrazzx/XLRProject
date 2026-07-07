@@ -52,10 +52,27 @@ applyServerCredentials() {
     fi
 
     if [ -n "${discord_token:-}" ] && [ -f "$config_file" ]; then
-        jq --arg token "$discord_token" '
-            .discord_config.token = $token |
-            .discord_config.enabled = true
+        mkdir -p /etc/xlr
+        if grep -q '^DISCORD_TOKEN=' /etc/xlr/secrets.env 2>/dev/null; then
+            sed -i "s|^DISCORD_TOKEN=.*|DISCORD_TOKEN=$discord_token|" /etc/xlr/secrets.env
+        else
+            echo "DISCORD_TOKEN=$discord_token" >> /etc/xlr/secrets.env
+        fi
+        chmod 600 /etc/xlr/secrets.env
+        jq '
+            .discord_config.enabled = true |
+            .discord_config.token = ""
         ' "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
+    fi
+
+    if [ -n "${discord_webhook:-}" ]; then
+        mkdir -p /etc/xlr
+        if grep -q '^DISCORD_WEBHOOK=' /etc/xlr/secrets.env 2>/dev/null; then
+            sed -i "s|^DISCORD_WEBHOOK=.*|DISCORD_WEBHOOK=$discord_webhook|" /etc/xlr/secrets.env
+        else
+            echo "DISCORD_WEBHOOK=$discord_webhook" >> /etc/xlr/secrets.env
+        fi
+        chmod 600 /etc/xlr/secrets.env
     fi
 
     if [ -n "${discord_webhook:-}" ] && [ -f "$config_file" ]; then
