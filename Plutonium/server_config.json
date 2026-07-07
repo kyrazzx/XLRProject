@@ -16,10 +16,10 @@
         "udp_min_size": 24,
         "udp_max_size": 1492,
         "rate_limit_enabled": true,
-        "rate_limit_per_ip_pps": 200,
-        "rate_limit_per_ip_burst": 400,
-        "rate_limit_pps": 12000,
-        "rate_limit_burst": 2000
+        "rate_limit_per_ip_pps": 150,
+        "rate_limit_per_ip_burst": 300,
+        "rate_limit_pps": 6000,
+        "rate_limit_burst": 1500
     },
     "customization": {
         "discord_invite": "discord.gg/63FAj2ZMrN",

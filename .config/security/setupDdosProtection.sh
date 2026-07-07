@@ -71,10 +71,10 @@ setupDdosProtection() {
     checkAndInstallCommand nft nftables
 
     local pps burst per_ip_pps per_ip_burst udp_min udp_max drop_fragments nft_ports
-    pps=$(jq -r '.security_hardening.rate_limit_pps // 12000' "$config_file")
-    burst=$(jq -r '.security_hardening.rate_limit_burst // 2000' "$config_file")
-    per_ip_pps=$(jq -r '.security_hardening.rate_limit_per_ip_pps // 200' "$config_file")
-    per_ip_burst=$(jq -r '.security_hardening.rate_limit_per_ip_burst // 400' "$config_file")
+    pps=$(jq -r '.security_hardening.rate_limit_pps // 6000' "$config_file")
+    burst=$(jq -r '.security_hardening.rate_limit_burst // 1500' "$config_file")
+    per_ip_pps=$(jq -r '.security_hardening.rate_limit_per_ip_pps // 150' "$config_file")
+    per_ip_burst=$(jq -r '.security_hardening.rate_limit_per_ip_burst // 300' "$config_file")
     udp_min=$(jq -r '.security_hardening.udp_min_size // 24' "$config_file")
     udp_max=$(jq -r '.security_hardening.udp_max_size // 1492' "$config_file")
     drop_fragments=$(jq -r '.security_hardening.drop_fragments // true' "$config_file")
@@ -86,7 +86,8 @@ setupDdosProtection() {
 
     local fragment_rule=""
     if [ "$drop_fragments" = "true" ]; then
-        fragment_rule="ip frag-off != 0 udp dport { $nft_ports } drop"
+        fragment_rule="        udp dport { $nft_ports } ip frag-off != 0 drop
+        udp dport { $nft_ports } ip flags mf drop"
     fi
 
     mkdir -p /etc/nftables.d
@@ -103,7 +104,7 @@ table inet xlr {
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
 
-        ${fragment_rule}
+${fragment_rule}
 
         udp dport { $nft_ports } meta length lt ${udp_min} drop
         udp dport { $nft_ports } meta length gt ${udp_max} drop

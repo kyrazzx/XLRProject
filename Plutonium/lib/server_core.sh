@@ -398,6 +398,46 @@ xlr_send_discord_webhook() {
         "$webhook_url" > /dev/null 2>&1 || true
 }
 
+xlr_port_listening() {
+    local port="$1"
+    ss -H -ulnp 2>/dev/null | grep -q ":${port} "
+}
+
+xlr_server_log_shows_limbo() {
+    local stdout_log="$1"
+    [ ! -f "$stdout_log" ] && return 1
+    tail -200 "$stdout_log" | grep -qiE "No current map loaded|No map specified in sv_mapRotation|map_restart will do nothing"
+}
+
+xlr_process_uptime_seconds() {
+    local pid="$1"
+    local started_at now
+    started_at=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
+    now=$(date +%s)
+    echo $((now - started_at))
+}
+
+xlr_server_needs_recovery() {
+    local config_file="$1"
+    local server_id="$2"
+    local port="$3"
+    local pid="$4"
+
+    local stdout_log uptime_sec
+    stdout_log="$(xlr_server_log_dir "$config_file" "$server_id")/stdout.log"
+
+    if xlr_server_log_shows_limbo "$stdout_log"; then
+        return 0
+    fi
+
+    uptime_sec=$(xlr_process_uptime_seconds "$pid")
+    if [ "$uptime_sec" -ge 90 ] && ! xlr_port_listening "$port"; then
+        return 0
+    fi
+
+    return 1
+}
+
 xlr_get_player_count() {
     local ip="$1"
     local port="$2"

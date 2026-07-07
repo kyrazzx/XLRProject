@@ -243,7 +243,6 @@ xlr_cmd_slap( player )
 
     player iprintlnbold( "^5[XLR]^7 Slapped!" );
     player Earthquake( 0.4, 1, player.origin, 1 );
-    player.damageShellShock( 20, 0.5 );
     if ( player.health > 25 )
         player.health = player.health - 15;
 }
@@ -253,8 +252,9 @@ xlr_cmd_yeet()
     self endon( "disconnect" );
 
     self iprintlnbold( "^5[XLR]^7 YEET!" );
-    self.damageShellShock( 30, 0.8 );
-    self.health = self.health - 5;
+    self Earthquake( 0.3, 1, self.origin, 1 );
+    if ( self.health > 5 )
+        self.health = self.health - 5;
 }
 
 onPlayerConnect()

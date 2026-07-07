@@ -46,6 +46,12 @@ xlr_patch_dedicated_cfg() {
     else
         echo "sv_maprotation \"$maprotation\"" >> "$cfg_file"
     fi
+
+    if grep -q '^sv_maprotationcurrent' "$cfg_file"; then
+        sed -i 's|^sv_maprotationcurrent.*|sv_maprotationcurrent ""|' "$cfg_file"
+    else
+        echo 'sv_maprotationcurrent ""' >> "$cfg_file"
+    fi
 }
 
 generateServerConfig() {
@@ -56,7 +62,7 @@ generateServerConfig() {
     local logs_dir="$workdir/Plutonium/storage/t6/logs"
     local servers_root="$plutonium_dir/servers"
     local template_config="$plutonium_dir/server_config.json"
-    local map_pool="map mp_nuketown_2020 map mp_raid map mp_slums map mp_express map mp_hijacked map mp_carrier map mp_meltdown"
+    local map_pool="map mp_nuketown_2020 map mp_raid map mp_slums map mp_express map mp_hijacked map mp_carrier map mp_meltdown map mp_nuketown_2020"
     local rcon="${rcon_password:-}"
 
     mkdir -p "$servers_root"/{ffa,tdm,gungame,zombies}/logs

@@ -191,6 +191,15 @@ xlr_monitor_once() {
             continue
         fi
 
+        if xlr_server_needs_recovery "$config_file" "$server_id" "$port" "$pid"; then
+            xlr_write_log "$monitoring_log_dir" "$server_id" "Server limbo (no map or UDP port down), restarting"
+            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id stuck without map, restarting..."
+            xlr_stop_server "$config_file" "$server"
+            sleep 2
+            xlr_launch_server_process "$config_file" "$server"
+            continue
+        fi
+
         current_cpu=$(ps -p "$pid" -o %cpu= 2>/dev/null | tr -d ' ')
         current_memory=$(ps -p "$pid" -o rss= 2>/dev/null | awk '{print $1 / 1024}')
         current_cpu=${current_cpu:-0}
