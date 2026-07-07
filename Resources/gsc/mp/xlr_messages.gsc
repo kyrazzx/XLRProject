@@ -3,10 +3,10 @@
 
 init()
 {
-    onPlayerSay( ::xlr_on_player_say );
+    level.callbackPlayerSay = ::xlr_on_player_say;
     level thread onPlayerConnect();
     level thread xlrAutoMessages();
-    xlr_log( "init OK — onPlayerSay + owner cmds active" );
+    xlr_log( "init OK - owner cmds + welcome active" );
 }
 
 xlr_log( msg )
@@ -20,18 +20,9 @@ xlr_cache_player_lang()
 
     wait 0.1;
 
-    // Client dvar only — default EN if unreadable (no server getDvarInt fallback)
-    code = self getdvar( "loc_language" );
-    if ( !isDefined( code ) )
-        code = 0;
-
-    self.xlrLangCode = code;
-    self.xlrLangIsFrench = ( code == PLACEHOLDER_LANG_FR_CODE );
-
-    if ( self.xlrLangIsFrench )
-        xlr_log( "lang " + self.name + "=" + code + " (FR)" );
-    else
-        xlr_log( "lang " + self.name + "=" + code + " (EN default)" );
+    self.xlrLangCode = 0;
+    self.xlrLangIsFrench = false;
+    xlr_log( "lang " + self.name + "=0 (EN default)" );
 }
 
 xlr_player_prefers_french( player )
@@ -83,15 +74,6 @@ xlr_broadcast_line_bold( msg_en, msg_fr )
     }
 }
 
-xlr_apply_owner_clantag( player )
-{
-    if ( !xlr_is_owner( player ) )
-        return;
-
-    player setClantag( "^6PLACEHOLDER_OWNER_CHAT_TAG^7" );
-    xlr_log( "owner clantag set: " + player.name );
-}
-
 xlr_is_owner( player )
 {
     if ( !isDefined( player ) || !isPlayer( player ) )
@@ -131,7 +113,7 @@ xlr_find_player( needle )
 xlr_on_player_say( message, team )
 {
     if ( !isDefined( self ) || !isPlayer( self ) )
-        return true;
+        return;
 
     msg = toLower( message );
 
@@ -143,15 +125,15 @@ xlr_on_player_say( message, team )
             if ( xlr_try_owner_command( message, msg ) )
                 return false;
 
-            return true;
+            return;
         }
 
         xlr_log( "owner chat restyle: " + self.name + " team=" + team );
-        xlr_owner_say_styled( message, team );
+        self thread xlr_owner_say_styled( message, team );
         return false;
     }
 
-    return true;
+    return;
 }
 
 xlr_owner_say_styled( message, team_mode )
@@ -161,25 +143,18 @@ xlr_owner_say_styled( message, team_mode )
     text_color = "^PLACEHOLDER_OWNER_TEXT_COLOR";
     styled = tag + " " + name_color + self.name + "^7: " + text_color + message + "^7";
 
-    if ( isDefined( team_mode ) && team_mode == 1 )
+    foreach ( player in level.players )
     {
-        foreach ( player in level.players )
-        {
-            if ( !isDefined( player ) || !isPlayer( player ) )
-                continue;
+        if ( !isDefined( player ) || !isPlayer( player ) )
+            continue;
 
-            if ( player.team != self.team )
-                continue;
+        if ( isDefined( team_mode ) && team_mode == 1 && player.team != self.team )
+            continue;
 
-            player tell( styled );
-        }
-
-        xlr_log( "owner team chat via tell(): " + self.name );
-        return;
+        player iprintln( styled );
     }
 
-    say( styled );
-    xlr_log( "owner global chat via say(): " + self.name );
+    xlr_log( "owner chat styled (iprintln): " + self.name );
 }
 
 xlr_try_owner_command( message, msg )
@@ -375,7 +350,6 @@ onPlayerConnect()
         player thread xlr_cache_player_lang();
         player thread onPlayerSpawned();
         player thread xlr_owner_disconnect_watch();
-        xlr_apply_owner_clantag( player );
     }
 }
 
@@ -388,7 +362,6 @@ xlr_owner_disconnect_watch()
 
     self waittill( "disconnect" );
     level.xlrOwnerAnnounced = undefined;
-    self resetClantag();
     xlr_log( "owner disconnected: " + self.name );
 }
 
@@ -425,7 +398,6 @@ onPlayerSpawned()
     if ( xlr_is_owner( self ) && !isDefined( level.xlrOwnerAnnounced ) )
     {
         level.xlrOwnerAnnounced = true;
-        xlr_apply_owner_clantag( self );
         xlr_log( "owner announce broadcast: " + self.name );
         foreach ( player in level.players )
         {
