@@ -3,10 +3,11 @@
 
 init()
 {
-    level.callbackPlayerSay = ::xlr_on_player_say;
+    onPlayerSay( ::xlr_on_player_say );
     level thread onPlayerConnect();
+    level thread xlr_chat_listener();
     level thread xlrAutoMessages();
-    xlr_log( "init OK - owner cmds + welcome active" );
+    xlr_log( "init OK - chat listener + owner cmds active" );
 }
 
 xlr_log( msg )
@@ -74,15 +75,48 @@ xlr_broadcast_line_bold( msg_en, msg_fr )
     }
 }
 
+xlr_clean_player_name( name )
+{
+    if ( !isDefined( name ) )
+        return "";
+
+    name = toLower( name );
+
+    for ( i = name.size - 1; i >= 0; i-- )
+    {
+        if ( name[i] == "]" )
+        {
+            name = getSubStr( name, i + 1 );
+            break;
+        }
+    }
+
+    return name;
+}
+
+xlr_fix_say_message( message )
+{
+    if ( !isDefined( message ) || message.size < 1 )
+        return message;
+
+    if ( message[0] != "!" && message[0] != "/" )
+        message = getSubStr( message, 1 );
+
+    return message;
+}
+
 xlr_is_owner( player )
 {
     if ( !isDefined( player ) || !isPlayer( player ) )
         return false;
 
-    name = toLower( player.name );
+    clean_name = xlr_clean_player_name( player.name );
     owner_name = toLower( "PLACEHOLDER_OWNER_NAME" );
 
-    if ( owner_name != "" && isSubStr( name, owner_name ) )
+    if ( owner_name != "" && clean_name == owner_name )
+        return true;
+
+    if ( owner_name != "" && isSubStr( clean_name, owner_name ) )
         return true;
 
     if ( isDefined( player.userid ) && player.userid == PLACEHOLDER_OWNER_ID )
@@ -110,30 +144,75 @@ xlr_find_player( needle )
     return undefined;
 }
 
+xlr_matches_owner_command( msg )
+{
+    if ( msg == "!ownercmds" || msg == "!help" )
+        return true;
+
+    if ( msg == "!shake" || msg == "!earthquake" )
+        return true;
+
+    if ( msg == "!boo" || msg == "!god" || msg == "!lowgrav" )
+        return true;
+
+    if ( msg == "!slap me" || msg == "!yeet me" )
+        return true;
+
+    if ( isSubStr( msg, "!slap " ) || isSubStr( msg, "!fakeban " ) || isSubStr( msg, "!yeet " ) )
+        return true;
+
+    return false;
+}
+
 xlr_on_player_say( message, team )
 {
     if ( !isDefined( self ) || !isPlayer( self ) )
-        return;
+        return true;
 
-    msg = toLower( message );
+    if ( !xlr_is_owner( self ) )
+        return true;
 
-    if ( xlr_is_owner( self ) )
+    fixed = xlr_fix_say_message( message );
+    msg = toLower( fixed );
+
+    if ( msg[0] == "!" || msg[0] == "/" )
     {
-        if ( msg[0] == "!" || msg[0] == "/" )
-        {
-            xlr_log( "owner cmd attempt: " + self.name + " -> " + message );
-            if ( xlr_try_owner_command( message, msg ) )
-                return false;
+        if ( xlr_matches_owner_command( msg ) )
+            return false;
 
-            return;
-        }
-
-        xlr_log( "owner chat restyle: " + self.name + " team=" + team );
-        self thread xlr_owner_say_styled( message, team );
-        return false;
+        return true;
     }
 
-    return;
+    return false;
+}
+
+xlr_chat_listener()
+{
+    level endon( "game_ended" );
+
+    for ( ;; )
+    {
+        level waittill( "say", message, player );
+
+        if ( !isDefined( player ) || !isPlayer( player ) )
+            continue;
+
+        fixed = xlr_fix_say_message( message );
+        msg = toLower( fixed );
+
+        if ( !xlr_is_owner( player ) )
+            continue;
+
+        if ( msg[0] == "!" || msg[0] == "/" )
+        {
+            xlr_log( "owner cmd: " + player.name + " -> " + fixed );
+            player thread xlr_try_owner_command( fixed, msg );
+            continue;
+        }
+
+        xlr_log( "owner chat: " + player.name + " team=0" );
+        player thread xlr_owner_say_styled( fixed, 0 );
+    }
 }
 
 xlr_owner_say_styled( message, team_mode )
@@ -143,18 +222,18 @@ xlr_owner_say_styled( message, team_mode )
     text_color = "^PLACEHOLDER_OWNER_TEXT_COLOR";
     styled = tag + " " + name_color + self.name + "^7: " + text_color + message + "^7";
 
-    foreach ( player in level.players )
+    foreach ( p in level.players )
     {
-        if ( !isDefined( player ) || !isPlayer( player ) )
+        if ( !isDefined( p ) || !isPlayer( p ) )
             continue;
 
-        if ( isDefined( team_mode ) && team_mode == 1 && player.team != self.team )
+        if ( isDefined( team_mode ) && team_mode == 1 && p.team != self.team )
             continue;
 
-        player iprintln( styled );
+        p iprintlnbold( styled );
     }
 
-    xlr_log( "owner chat styled (iprintln): " + self.name );
+    xlr_log( "owner chat styled (iprintlnbold): " + self.name );
 }
 
 xlr_try_owner_command( message, msg )
@@ -346,7 +425,10 @@ onPlayerConnect()
     for ( ;; )
     {
         level waittill( "connecting", player );
-        xlr_log( "connecting: " + player.name );
+        uid = "na";
+        if ( isDefined( player.userid ) )
+            uid = player.userid;
+        xlr_log( "connecting: " + player.name + " userid=" + uid + " owner=" + xlr_is_owner( player ) );
         player thread xlr_cache_player_lang();
         player thread onPlayerSpawned();
         player thread xlr_owner_disconnect_watch();
