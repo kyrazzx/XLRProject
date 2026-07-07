@@ -105,8 +105,8 @@ table inet xlr {
 
         ${fragment_rule}
 
-        udp dport { $nft_ports } length < ${udp_min} drop
-        udp dport { $nft_ports } length > ${udp_max} drop
+        udp dport { $nft_ports } meta length lt ${udp_min} drop
+        udp dport { $nft_ports } meta length gt ${udp_max} drop
 
         udp dport { $nft_ports } meter game_per_ip { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets } drop
 
@@ -134,8 +134,8 @@ table inet xlr {
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
 
-        udp dport { $nft_ports } length < ${udp_min} drop
-        udp dport { $nft_ports } length > ${udp_max} drop
+        udp dport { $nft_ports } meta length lt ${udp_min} drop
+        udp dport { $nft_ports } meta length gt ${udp_max} drop
 
         udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
     }
