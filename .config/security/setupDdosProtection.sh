@@ -98,12 +98,6 @@ table inet xlr {
         timeout 30d
     }
 
-    set per_ip_limit {
-        type ipv4_addr
-        flags dynamic
-        size 131072
-    }
-
     chain input {
         type filter hook input priority filter - 10; policy accept;
 
@@ -114,7 +108,7 @@ table inet xlr {
         udp dport { $nft_ports } length < ${udp_min} drop
         udp dport { $nft_ports } length > ${udp_max} drop
 
-        udp dport { $nft_ports } update @per_ip_limit { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets } drop
+        udp dport { $nft_ports } meter game_per_ip { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets } drop
 
         udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
     }
@@ -143,8 +137,6 @@ table inet xlr {
         udp dport { $nft_ports } length < ${udp_min} drop
         udp dport { $nft_ports } length > ${udp_max} drop
 
-        udp dport { $nft_ports } limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets drop
-
         udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
     }
 }
@@ -155,21 +147,19 @@ EOF
 
 xlr_load_nft_rules() {
     local conf="/etc/nftables.d/xlr-game.conf"
-
-    if ! nft -c -f "$conf" 2>/tmp/xlr-nft-check.err; then
-        echo "nftables config check failed:"
-        cat /tmp/xlr-nft-check.err
-        return 1
-    fi
+    local err_file
+    err_file="$(mktemp)"
 
     nft list table inet xlr >/dev/null 2>&1 && nft delete table inet xlr 2>/dev/null || true
 
-    if ! nft -f "$conf" 2>/tmp/xlr-nft-load.err; then
+    if ! nft -f "$conf" >"$err_file" 2>&1; then
         echo "Failed to load nftables rules:"
-        cat /tmp/xlr-nft-load.err
+        cat "$err_file"
+        rm -f "$err_file"
         return 1
     fi
 
+    rm -f "$err_file"
     echo "nftables rules loaded: inet xlr"
     return 0
 }
