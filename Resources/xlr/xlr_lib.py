@@ -362,6 +362,48 @@ def add_ban(conn, ip=None, plutonium_id=None, reason="", banned_by="system"):
         nft_ban_ip(ip)
 
 
+def remove_ban(conn, ip=None, plutonium_id=None):
+    ips_to_unban = set()
+    if ip:
+        ips_to_unban.add(ip)
+    if plutonium_id:
+        ban_rows = conn.execute(
+            """
+            SELECT DISTINCT ip FROM bans
+            WHERE active = 1 AND plutonium_id = ? AND ip IS NOT NULL AND ip != ''
+            """,
+            (plutonium_id,),
+        ).fetchall()
+        for row in ban_rows:
+            ips_to_unban.add(row["ip"])
+        player_row = conn.execute(
+            "SELECT GROUP_CONCAT(DISTINCT ip) AS ips FROM player_ips WHERE plutonium_id = ?",
+            (plutonium_id,),
+        ).fetchone()
+        if player_row and player_row["ips"]:
+            ips_to_unban.update(ip.strip() for ip in player_row["ips"].split(",") if ip.strip())
+
+    clauses = []
+    params = []
+    if ip:
+        clauses.append("ip = ?")
+        params.append(ip)
+    if plutonium_id:
+        clauses.append("plutonium_id = ?")
+        params.append(plutonium_id)
+    if not clauses:
+        return 0
+
+    cur = conn.execute(
+        f"UPDATE bans SET active = 0 WHERE active = 1 AND ({' OR '.join(clauses)})",
+        params,
+    )
+    conn.commit()
+    for banned_ip in ips_to_unban:
+        nft_unban_ip(banned_ip)
+    return cur.rowcount
+
+
 def create_report(conn, reporter_name, reporter_id, target_name, target_id, reason, server_id, source):
     now = utc_now()
     cur = conn.execute(

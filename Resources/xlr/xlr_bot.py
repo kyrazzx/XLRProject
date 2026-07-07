@@ -19,6 +19,7 @@ from xlr_lib import (
     lookup_player,
     parse_status_clients,
     rcon_query,
+    remove_ban,
     utc_now,
 )
 
@@ -115,7 +116,7 @@ class XLRBot(commands.Bot):
             embed.add_field(name="Target", value=row["target_name"] or "unknown", inline=True)
             embed.add_field(name="Target ID", value=row["target_id"] or "n/a", inline=True)
             embed.add_field(name="Reason", value=row["reason"] or "n/a", inline=False)
-            embed.set_footer(text="!ban <id|name|ip> <reason> | !dismiss <report_id>")
+            embed.set_footer(text="!ban <id|name|ip> <reason> | !deban <id|name|ip> | !dismiss <report_id>")
             message = await channel.send(embed=embed)
             conn.execute(
                 "UPDATE reports SET discord_message_id = ? WHERE id = ?",
@@ -219,6 +220,22 @@ def main():
         add_ban(conn, ip=ip, plutonium_id=plutonium_id, reason=reason, banned_by=str(ctx.author))
         await ctx.send(f"Banned `{target}` ({reason}).")
 
+    @bot.command(name="deban")
+    @commands.has_permissions(administrator=True)
+    async def deban_command(ctx, target: str):
+        conn = connect_db()
+        init_db(conn)
+        rows = lookup_player(conn, target)
+        ip = target if "." in target and target.replace(".", "").isdigit() else None
+        plutonium_id = rows[0]["plutonium_id"] if rows else (target if target.isdigit() else None)
+        if rows and rows[0]["ips"]:
+            ip = rows[0]["ips"].split(",")[0]
+        count = remove_ban(conn, ip=ip, plutonium_id=plutonium_id)
+        if count:
+            await ctx.send(f"Unbanned `{target}` ({count} ban record(s) cleared).")
+        else:
+            await ctx.send(f"No active ban found for `{target}`.")
+
     @bot.command(name="restart")
     @commands.has_permissions(administrator=True)
     async def restart_command(ctx, server_id: str = "all"):
@@ -235,7 +252,7 @@ def main():
     async def help_command(ctx):
         await ctx.send(
             "Commands: !status !players [id] !report <player> <reason> !lookup <name|id> "
-            "!ban <player|id|ip> <reason> !restart [id|all] !xlrbackup !xlrhelp"
+            "!ban <player|id|ip> <reason> !deban <player|id|ip> !restart [id|all] !xlrbackup !xlrhelp"
         )
 
     bot.run(token)
