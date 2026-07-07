@@ -22,6 +22,7 @@ installXlrPython() {
     if [ ! -f /etc/xlr/secrets.env ]; then
         cat > /etc/xlr/secrets.env << 'EOF'
 DISCORD_TOKEN=
+DISCORD_OWNER_ID=
 DISCORD_WEBHOOK=
 EOF
         chmod 600 /etc/xlr/secrets.env

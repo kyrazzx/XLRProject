@@ -73,6 +73,8 @@
     "discord_config": {
         "enabled": false,
         "token": "",
+        "default_prefix": "!",
+        "owner_id": "",
         "status_channel_id": "",
         "reports_channel_id": "",
         "guild_id": "",

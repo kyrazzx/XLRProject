@@ -1,87 +1,116 @@
-#!/usr/bin/env python3
-
 import asyncio
-import json
-import subprocess
-from pathlib import Path
 
 import discord
 from discord.ext import commands, tasks
 
+from xlr_bot_core import (
+    ActionTracker,
+    BotStore,
+    LOGO_PATH,
+    RaidTracker,
+    SpamTracker,
+    default_prefix,
+    get_prefix_value,
+    xlr_embed,
+)
+from xlr_bot_events import SecurityEvents, SecurityRuntime
+from xlr_bot_views import CaptchaView, CloseTicketView, TicketPanelView
 from xlr_lib import (
     WORKROOT,
-    add_ban,
     collect_server_statuses,
     connect_db,
-    create_report,
     discord_token,
     format_discord_presence,
-    format_discord_status_lines,
     init_db,
     load_config,
-    lookup_player,
-    remove_ban,
-    utc_now,
 )
 
-MANAGER_PATH = WORKROOT / "Plutonium" / "XLRManager.sh"
+COG_MODULES = [
+    "cogs.administration",
+    "cogs.moderation",
+    "cogs.utility",
+    "cogs.fun",
+    "cogs.games",
+    "cogs.xlr_servers",
+    "cogs.bot_commands",
+]
 
 
-def run_manager(*args):
-    if not MANAGER_PATH.exists():
-        return 1, "XLRManager not found"
-    result = subprocess.run(
-        ["bash", str(MANAGER_PATH), *args],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    output = (result.stdout or "") + (result.stderr or "")
-    return result.returncode, output.strip() or "done"
-
-
-def server_status_lines(config):
-    statuses, _, _ = collect_server_statuses(config)
-    return format_discord_status_lines(statuses)
-
-
-def moderation_channel_id(config):
-    mod = config.get("moderation", {})
-    discord_cfg = config.get("discord_config", {})
-    return (
-        mod.get("discord_reports_channel_id", "")
-        or discord_cfg.get("reports_channel_id", "")
-    )
+async def dynamic_prefix(bot, message):
+    prefix = default_prefix()
+    if message.guild:
+        prefix = await get_prefix_value(bot.store, message.guild.id)
+    return commands.when_mentioned_or(prefix)(bot, message)
 
 
 class XLRBot(commands.Bot):
     def __init__(self, config):
         intents = discord.Intents.default()
         intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
+        intents.members = True
+        intents.moderation = True
+        intents.invites = True
+        intents.voice_states = True
+        intents.presences = True
+        super().__init__(command_prefix=dynamic_prefix, intents=intents, help_command=None)
         self.config = config
+        self.store = BotStore()
+        self.action_tracker = ActionTracker()
+        self.spam_tracker = SpamTracker()
+        self.raid_tracker = RaidTracker()
+        self.security = SecurityRuntime(self)
+        self._branding_applied = False
 
     async def setup_hook(self):
+        for module in COG_MODULES:
+            await self.load_extension(module)
+        await self.add_cog(SecurityEvents(self))
+        self.add_view(CaptchaView())
+        self.add_view(TicketPanelView())
+        self.add_view(CloseTicketView())
         interval = int(self.config.get("discord_config", {}).get("update_interval", 30))
         self.status_loop.change_interval(seconds=max(interval, 15))
+        self.reports_loop.change_interval(seconds=15)
         self.status_loop.start()
         self.reports_loop.start()
 
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send(embed=xlr_embed(self, description="You do not have permission to use this command."))
+            return
+        if isinstance(error, commands.CommandNotFound):
+            return
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(embed=xlr_embed(self, description=f"Missing argument: `{error.param.name}`"))
+            return
+        await ctx.send(embed=xlr_embed(self, description="An error occurred while running that command."))
+
     async def on_ready(self):
+        if not self._branding_applied:
+            await self._apply_branding()
+            self._branding_applied = True
         statuses, total_players, _ = collect_server_statuses(load_config())
-        await self.change_presence(
-            activity=discord.Game(name=format_discord_presence(statuses, total_players))
-        )
+        await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
+
+    async def _apply_branding(self):
+        if not LOGO_PATH.is_file():
+            return
+        try:
+            with open(LOGO_PATH, "rb") as handle:
+                await self.user.edit(avatar=handle.read())
+        except discord.HTTPException:
+            pass
 
     @tasks.loop(seconds=30)
     async def status_loop(self):
         self.config = load_config()
         statuses, total_players, _ = collect_server_statuses(self.config)
-        summary = format_discord_presence(statuses, total_players)
-        await self.change_presence(activity=discord.Game(name=summary))
+        await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
 
     @tasks.loop(seconds=15)
     async def reports_loop(self):
+        from cogs.xlr_servers import moderation_channel_id
+
         conn = connect_db()
         init_db(conn)
         rows = conn.execute(
@@ -94,18 +123,14 @@ class XLRBot(commands.Bot):
         if not channel:
             return
         for row in rows:
-            embed = discord.Embed(
-                title=f"Report #{row['id']}",
-                colour=discord.Colour.red(),
-                timestamp=discord.utils.utcnow(),
-            )
+            embed = xlr_embed(self, title=f"Player Report #{row['id']}", color=0xFF3355)
             embed.add_field(name="Server", value=row["server_id"] or "unknown", inline=True)
             embed.add_field(name="Source", value=row["source"] or "unknown", inline=True)
             embed.add_field(name="Reporter", value=row["reporter_name"] or "unknown", inline=False)
             embed.add_field(name="Target", value=row["target_name"] or "unknown", inline=True)
             embed.add_field(name="Target ID", value=row["target_id"] or "n/a", inline=True)
             embed.add_field(name="Reason", value=row["reason"] or "n/a", inline=False)
-            embed.set_footer(text="!ban <id|name|ip> <reason> | !deban <id|name|ip> | !dismiss <report_id>")
+            embed.set_footer(text="Use !gameban / !gameunban / !dismiss <id> · XLR EU · Black Ops II")
             message = await channel.send(embed=embed)
             conn.execute(
                 "UPDATE reports SET discord_message_id = ? WHERE id = ?",
@@ -127,119 +152,15 @@ def main():
     if not config_path.exists():
         print(f"Missing configuration: {config_path}")
         raise SystemExit(1)
-
     config = load_config()
     token = discord_token()
     if not token:
         print("Discord token not configured. Set /etc/xlr/secrets.env DISCORD_TOKEN=...")
         raise SystemExit(1)
-
     if not config.get("discord_config", {}).get("enabled", False):
         print("Discord bot disabled in configuration")
         raise SystemExit(0)
-
     bot = XLRBot(config)
-
-    @bot.command(name="status")
-    async def status_command(ctx):
-        lines = server_status_lines(load_config())
-        await ctx.send("\n".join(lines) or "No servers configured")
-
-    @bot.command(name="players")
-    async def players_command(ctx, server_id: str = ""):
-        statuses, _, _ = collect_server_statuses(load_config())
-        replies = []
-        for item in statuses:
-            if server_id and item["id"] != server_id:
-                continue
-            if item["online"]:
-                replies.append(f"{item['name']}: {item['players']} players")
-            else:
-                replies.append(f"{item['name']}: offline")
-        await ctx.send("\n".join(replies) or "No data")
-
-    @bot.command(name="report")
-    async def report_command(ctx, target: str, *, reason: str = "No reason provided"):
-        conn = connect_db()
-        init_db(conn)
-        rows = lookup_player(conn, target)
-        target_id = rows[0]["plutonium_id"] if rows else ""
-        target_name = rows[0]["current_name"] if rows else target
-        report_id = create_report(
-            conn,
-            str(ctx.author),
-            str(ctx.author.id),
-            target_name,
-            target_id,
-            reason,
-            "discord",
-            "discord",
-        )
-        await ctx.send(f"Report #{report_id} recorded for **{target_name}**.")
-
-    @bot.command(name="lookup")
-    async def lookup_command(ctx, *, query: str):
-        conn = connect_db()
-        init_db(conn)
-        rows = lookup_player(conn, query)
-        if not rows:
-            await ctx.send("No player found.")
-            return
-        lines = []
-        for row in rows:
-            lines.append(
-                f"**{row['current_name']}** | ID `{row['plutonium_id']}` | Steam `{row['steam_id'] or 'n/a'}`\nIPs: {row['ips'] or 'n/a'}"
-            )
-        await ctx.send("\n".join(lines)[:1900])
-
-    @bot.command(name="ban")
-    @commands.has_permissions(administrator=True)
-    async def ban_command(ctx, target: str, *, reason: str = "Banned by staff"):
-        conn = connect_db()
-        init_db(conn)
-        rows = lookup_player(conn, target)
-        ip = target if "." in target and target.replace(".", "").isdigit() else None
-        plutonium_id = rows[0]["plutonium_id"] if rows else (target if target.isdigit() else None)
-        if rows and rows[0]["ips"]:
-            ip = rows[0]["ips"].split(",")[0]
-        add_ban(conn, ip=ip, plutonium_id=plutonium_id, reason=reason, banned_by=str(ctx.author))
-        await ctx.send(f"Banned `{target}` ({reason}).")
-
-    @bot.command(name="deban")
-    @commands.has_permissions(administrator=True)
-    async def deban_command(ctx, target: str):
-        conn = connect_db()
-        init_db(conn)
-        rows = lookup_player(conn, target)
-        ip = target if "." in target and target.replace(".", "").isdigit() else None
-        plutonium_id = rows[0]["plutonium_id"] if rows else (target if target.isdigit() else None)
-        if rows and rows[0]["ips"]:
-            ip = rows[0]["ips"].split(",")[0]
-        count = remove_ban(conn, ip=ip, plutonium_id=plutonium_id)
-        if count:
-            await ctx.send(f"Unbanned `{target}` ({count} ban record(s) cleared).")
-        else:
-            await ctx.send(f"No active ban found for `{target}`.")
-
-    @bot.command(name="restart")
-    @commands.has_permissions(administrator=True)
-    async def restart_command(ctx, server_id: str = "all"):
-        code, output = await asyncio.to_thread(run_manager, "restart", server_id)
-        await ctx.send(output[:1900] if output else ("restart failed" if code else "restart sent"))
-
-    @bot.command(name="xlrbackup")
-    @commands.has_permissions(administrator=True)
-    async def backup_command(ctx):
-        code, output = await asyncio.to_thread(run_manager, "backup")
-        await ctx.send(output[:1900] if output else ("backup failed" if code else "backup complete"))
-
-    @bot.command(name="xlrhelp")
-    async def help_command(ctx):
-        await ctx.send(
-            "Commands: !status !players [id] !report <player> <reason> !lookup <name|id> "
-            "!ban <player|id|ip> <reason> !deban <player|id|ip> !restart [id|all] !xlrbackup !xlrhelp"
-        )
-
     bot.run(token)
 
 
