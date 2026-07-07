@@ -105,18 +105,16 @@ table inet xlr {
     }
 
     chain input {
-        type filter hook input priority filter; policy accept;
+        type filter hook input priority filter - 10; policy accept;
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
-
-        ct state invalid ip protocol udp udp dport { $nft_ports } drop
 
         ${fragment_rule}
 
         udp dport { $nft_ports } length < ${udp_min} drop
         udp dport { $nft_ports } length > ${udp_max} drop
 
-        udp dport { $nft_ports } update @per_ip_limit { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} } drop
+        udp dport { $nft_ports } update @per_ip_limit { ip saddr limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets } drop
 
         udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
     }
@@ -127,10 +125,53 @@ EOF
         echo 'include "/etc/nftables.d/xlr-game.conf"' >> /etc/nftables.conf
     fi
 
+    if ! xlr_load_nft_rules; then
+        echo "Retrying with simplified nftables rules..."
+        cat > /etc/nftables.d/xlr-game.conf << EOF
+table inet xlr {
+    set banned_ips {
+        type ipv4_addr
+        flags timeout
+        timeout 30d
+    }
+
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+
+        ip saddr @banned_ips udp dport { $nft_ports } drop
+
+        udp dport { $nft_ports } length < ${udp_min} drop
+        udp dport { $nft_ports } length > ${udp_max} drop
+
+        udp dport { $nft_ports } limit rate over ${per_ip_pps}/second burst ${per_ip_burst} packets drop
+
+        udp dport { $nft_ports } limit rate over ${pps}/second burst ${burst} packets drop
+    }
+}
+EOF
+        xlr_load_nft_rules || return 1
+    fi
+}
+
+xlr_load_nft_rules() {
+    local conf="/etc/nftables.d/xlr-game.conf"
+
+    if ! nft -c -f "$conf" 2>/tmp/xlr-nft-check.err; then
+        echo "nftables config check failed:"
+        cat /tmp/xlr-nft-check.err
+        return 1
+    fi
+
     nft list table inet xlr >/dev/null 2>&1 && nft delete table inet xlr 2>/dev/null || true
-    nft -f /etc/nftables.d/xlr-game.conf 2>/dev/null || true
-    systemctl enable nftables 2>/dev/null || true
-    systemctl restart nftables 2>/dev/null || true
+
+    if ! nft -f "$conf" 2>/tmp/xlr-nft-load.err; then
+        echo "Failed to load nftables rules:"
+        cat /tmp/xlr-nft-load.err
+        return 1
+    fi
+
+    echo "nftables rules loaded: inet xlr"
+    return 0
 }
 
 xlr_ban_ip_nft() {
