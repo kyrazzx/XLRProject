@@ -361,7 +361,7 @@ COMMAND_DESCRIPTIONS = {
     "status": "Show live status of all XLR BO2 game servers.",
     "players": "Show player counts per game server. Optional: server id.",
     "report": "Submit a player report. Usage: <player> <reason>",
-    "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP.",
+    "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP. Bot owner only.",
     "gameban": "Ban a player from XLR BO2 servers. Usage: <player|id|ip> <reason>",
     "gameunban": "Remove a player ban from XLR BO2 servers.",
     "restart": "Restart game servers. Usage: [ffa|tdm|all]",
@@ -421,12 +421,10 @@ COMMAND_DESCRIPTIONS = {
     "setprefix": "Change the bot prefix for this server.",
     "stat": "Show how many servers the bot is in.",
     "support": "Get the XLR community Discord invite.",
-    "patchnotes": "Show the latest XLR bot patch notes.",
     "allservers": "List every server the bot is connected to.",
     "leave": "Make the bot leave a server.",
     "setstatus": "Change the bot playing status.",
     "join": "Make the bot join your voice channel.",
-    "token": "Security reminder about bot tokens.",
 }
 
 

@@ -62,17 +62,6 @@ class BotCommands(commands.Cog):
             )
         )
 
-    @commands.command(name="patchnotes", aliases=["patch-note"])
-    async def patchnotes(self, ctx):
-        description = (
-            "• Full anti-nuke suite with whitelist support\n"
-            "• Moderation, warnings, temp-bans and global bans\n"
-            "• Captcha verification, tickets, welcome messages and logs\n"
-            "• XLR BO2 server status, player lookup, reports and game bans\n"
-            "• Styled embeds with XLR PROJECT branding"
-        )
-        await ctx.send(embed=xlr_embed(self.bot, title="XLR Bot Patch Notes", description=description))
-
     @commands.command(name="allservers", aliases=["allserveur"])
     @bot_owner_only()
     async def allservers(self, ctx):
@@ -111,10 +100,6 @@ class BotCommands(commands.Cog):
         else:
             await ctx.author.voice.channel.connect()
         await ctx.send(embed=xlr_embed(self.bot, description=f"Joined {ctx.author.voice.channel.mention}."))
-
-    @commands.command(name="token")
-    async def token(self, ctx):
-        await ctx.send(embed=xlr_embed(self.bot, description="My token is secure. Never share your bot token with anyone."))
 
 
 async def setup(bot):

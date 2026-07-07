@@ -4,7 +4,7 @@ import subprocess
 import discord
 from discord.ext import commands
 
-from xlr_bot_core import CATEGORY_BO2, XLR_DANGER, XLR_SUCCESS, discord_invite_link, xlr_embed
+from xlr_bot_core import CATEGORY_BO2, XLR_DANGER, XLR_SUCCESS, bot_owner_only, discord_invite_link, xlr_embed
 from xlr_lib import (
     WORKROOT,
     add_ban,
@@ -108,6 +108,7 @@ class XLRServers(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="lookup")
+    @bot_owner_only()
     async def lookup(self, ctx, *, query: str):
         conn = connect_db()
         init_db(conn)
