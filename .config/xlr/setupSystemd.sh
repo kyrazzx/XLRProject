@@ -114,6 +114,7 @@ ExecStart=$workdir/Resources/xlr/venv/bin/python $workdir/Resources/xlr/xlr_bot.
 Restart=on-failure
 RestartSec=15
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
 EnvironmentFile=-/etc/xlr/secrets.env
 
 [Install]
@@ -134,6 +135,7 @@ ExecStart=$workdir/Resources/xlr/venv/bin/python $workdir/Resources/xlr/player_t
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
 EnvironmentFile=-/etc/xlr/secrets.env
 
 [Install]

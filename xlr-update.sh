@@ -55,6 +55,19 @@ merge_local_config() {
     mv "$tmp_out" "$new_config"
 }
 
+prepare_git_update() {
+    local repo_user
+    repo_user=$(stat -c '%U' "$DEFAULT_DIR")
+
+    if [ -n "$repo_user" ] && [ "$repo_user" != "root" ]; then
+        sudo chown -R "$repo_user:$repo_user" "$DEFAULT_DIR/Resources" 2>/dev/null || true
+    fi
+
+    while IFS= read -r -d '' cache_dir; do
+        sudo rm -rf "$cache_dir"
+    done < <(find "$DEFAULT_DIR" -type d -name __pycache__ -print0 2>/dev/null)
+}
+
 sync_install_paths() {
   local config_file="$1"
   local workdir="$2"
@@ -82,6 +95,7 @@ run_light_post_update() {
             "$DEFAULT_DIR/Server" \
             "$DEFAULT_DIR/Plutonium/storage" \
             "$DEFAULT_DIR/Plutonium/servers" \
+            "$DEFAULT_DIR/Resources" \
             2>/dev/null || true
     fi
 
@@ -119,6 +133,7 @@ if [ -f "$SECRETS_FILE" ]; then
 fi
 
 cd "$DEFAULT_DIR"
+prepare_git_update
 git fetch origin
 git reset --hard origin/main
 git pull --ff-only origin main
