@@ -7,7 +7,7 @@ init()
     level thread onPlayerConnect();
     level thread xlr_chat_listener();
     level thread xlrAutoMessages();
-    xlr_log( "init OK - chat listener + owner cmds active" );
+    xlr_log( "init OK - compiled chat v3" );
 }
 
 xlr_log( msg )
@@ -428,7 +428,10 @@ onPlayerConnect()
         uid = "na";
         if ( isDefined( player.userid ) )
             uid = player.userid;
-        xlr_log( "connecting: " + player.name + " userid=" + uid + " owner=" + xlr_is_owner( player ) );
+        owner_flag = "no";
+        if ( xlr_is_owner( player ) )
+            owner_flag = "yes";
+        xlr_log( "connecting: " + player.name + " userid=" + uid + " owner=" + owner_flag );
         player thread xlr_cache_player_lang();
         player thread onPlayerSpawned();
         player thread xlr_owner_disconnect_watch();

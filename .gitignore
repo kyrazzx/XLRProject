@@ -8,4 +8,8 @@ Resources/binaries/binkw32.dll
 __pycache__/
 *.py[cod]
 *.log
-xlr-backups/
+xlr-build/
+.build/
+.tools/
+compiled/
+Plutonium/storage/t6/scripts/mp/xlr_messages.compile.log

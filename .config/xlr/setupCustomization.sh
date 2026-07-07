@@ -26,17 +26,29 @@ setupCustomization() {
 
     local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
     local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
-    mkdir -p "$gsc_dest"
+    local gsc_build="$workdir/.build/gsc"
+    mkdir -p "$gsc_dest" "$gsc_build"
+
     if [ -f "$gsc_src" ]; then
-        cp "$gsc_src" "$gsc_dest/xlr_messages.gsc"
-        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_NAME|${owner_name}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_ID|${owner_id}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_LANG_FR_CODE|${lang_fr_code}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
-        echo "[XLR] GSC deployed -> $gsc_dest/xlr_messages.gsc (owner=${owner_name} id=${owner_id} lang_fr=${lang_fr_code})"
+        cp "$gsc_src" "$gsc_build/xlr_messages.gsc"
+        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_OWNER_NAME|${owner_name}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_OWNER_ID|${owner_id}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+        sed -i "s|PLACEHOLDER_LANG_FR_CODE|${lang_fr_code}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+
+        # shellcheck source=/dev/null
+        source "$workdir/.config/xlr/compileGsc.sh"
+        if xlr_compile_gsc_file "$workdir" "$gsc_build/xlr_messages.gsc" "$gsc_dest/xlr_messages.gsc" "$gsc_dest/xlr_messages.compile.log"; then
+            echo "[XLR] GSC deployed (compiled) owner=${owner_name} id=${owner_id} lang_fr=${lang_fr_code}"
+        else
+            echo "[XLR] WARN: compile failed — keeping last working GSC if present; check $gsc_dest/xlr_messages.compile.log"
+            if [ ! -f "$gsc_dest/xlr_messages.gsc" ] || ! xlr_gsc_looks_compiled "$gsc_dest/xlr_messages.gsc" 2>/dev/null; then
+                echo "[XLR] ERROR: no valid compiled GSC on disk — server may not load maps with new features"
+            fi
+        fi
     else
         echo "[XLR] WARN: missing GSC source $gsc_src"
     fi
