@@ -75,6 +75,10 @@ class XLRBot(commands.Bot):
         self.reports_loop.start()
 
     async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.CheckFailure):
+            message = str(error) or "You cannot run this command."
+            await ctx.send(embed=xlr_embed(self, description=message))
+            return
         if isinstance(error, commands.MissingPermissions):
             await ctx.send(embed=xlr_embed(self, description="You do not have permission to use this command."))
             return

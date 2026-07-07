@@ -4,7 +4,7 @@ import subprocess
 import discord
 from discord.ext import commands
 
-from xlr_bot_core import XLR_DANGER, XLR_SUCCESS, discord_invite_link, xlr_embed
+from xlr_bot_core import CATEGORY_BO2, XLR_DANGER, XLR_SUCCESS, discord_invite_link, xlr_embed
 from xlr_lib import (
     WORKROOT,
     add_ban,
@@ -40,7 +40,7 @@ def moderation_channel_id(config):
 
 
 class XLRServers(commands.Cog):
-    category = "XLR Servers"
+    category = CATEGORY_BO2
 
     def __init__(self, bot):
         self.bot = bot

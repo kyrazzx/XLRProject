@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import discord
+from discord.ext import commands
 
 from xlr_lib import WORKROOT, load_config, load_secrets
 
@@ -322,12 +323,177 @@ def format_welcome(template, member):
     )
 
 
+CATEGORY_OWNER = "Owner"
+CATEGORY_BO2 = "BO2 Servers"
+CATEGORY_ORDER = [
+    CATEGORY_BO2,
+    CATEGORY_OWNER,
+    "Moderation",
+    "Utility",
+    "Fun",
+    "Mini-Games",
+    "Bot",
+]
+
+COMMAND_DESCRIPTIONS = {
+    "antibot": "Enable or disable the anti-bot module.",
+    "antichannel": "Enable or disable anti-channel create/delete protection.",
+    "antilink": "Enable or disable the anti-link module.",
+    "antiban": "Enable or disable the anti-ban module.",
+    "antiguildupdate": "Enable or disable anti-guild-update protection.",
+    "anticreateinvite": "Enable or disable anti-invite creation.",
+    "antikick": "Enable or disable the anti-kick module.",
+    "antimassban": "Enable or disable anti-mass-ban detection.",
+    "antimasskick": "Enable or disable anti-mass-kick detection.",
+    "antiraid": "Enable or disable anti-raid join protection.",
+    "anti-mass-mention": "Enable or disable anti-mass-mention protection.",
+    "spam": "Enable or disable the anti-spam module.",
+    "secur-max": "Activate all security modules at once.",
+    "secur-on": "Activate standard security modules.",
+    "secur-off": "Deactivate all security modules.",
+    "secur": "Show the current state of every security module.",
+    "whitelist": "Manage the anti-nuke whitelist. Usage: add/remove/list @user",
+    "setup-captcha": "Set up captcha verification. Usage: #channel @role",
+    "setup-logs": "Set the moderation and security log channel.",
+    "setup-autorole": "Set the role automatically given to new members.",
+    "scan-members": "Apply the auto-role to all members who are missing it.",
+    "setup-ticket": "Deploy the support ticket panel in a channel.",
+    "status": "Show live status of all XLR BO2 game servers.",
+    "players": "Show player counts per game server. Optional: server id.",
+    "report": "Submit a player report. Usage: <player> <reason>",
+    "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP.",
+    "gameban": "Ban a player from XLR BO2 servers. Usage: <player|id|ip> <reason>",
+    "gameunban": "Remove a player ban from XLR BO2 servers.",
+    "restart": "Restart game servers. Usage: [ffa|tdm|all]",
+    "backup": "Run an XLR server backup immediately.",
+    "dismiss": "Dismiss a pending in-game or Discord report by ID.",
+    "ban": "Permanently ban a member from this Discord server.",
+    "kick": "Kick a member from this Discord server.",
+    "mute": "Temporarily mute a member. Usage: @user <duration> [reason]",
+    "unmute": "Remove a member timeout/mute.",
+    "tempban": "Temporarily ban a member. Usage: @user <duration> [reason]",
+    "unban": "Unban a user by their Discord ID.",
+    "warn": "Warn a member and log the infraction.",
+    "clearwarns": "Clear all warnings for a member.",
+    "sanction": "View a member's warning history.",
+    "clear": "Delete messages in bulk. Usage: <1-100>",
+    "prune": "Delete recent messages from one user.",
+    "lock": "Lock the current channel for @everyone.",
+    "unlock": "Unlock the current channel for @everyone.",
+    "renew": "Clone and replace the current channel.",
+    "snipe": "Show the last deleted message in this channel.",
+    "gban": "Globally ban a user across every server the bot is in.",
+    "gunban": "Remove a global ban from a user.",
+    "greet": "Configure welcome messages. Usage: #channel [message]",
+    "greet-list": "Show the current welcome message configuration.",
+    "invite-guild": "Create a permanent invite link for this server.",
+    "member": "Show the member count of this server.",
+    "serverinfo": "Display information about this server.",
+    "userinfo": "Display information about a user.",
+    "banner": "Show a user's profile banner.",
+    "avatar": "Show a user's avatar.",
+    "random-avatar": "Show a random member's avatar.",
+    "servericon": "Show this server's icon.",
+    "alladmin": "List all administrators in this server.",
+    "vc": "Show how many members are in voice channels.",
+    "poll": "Create a yes/no poll.",
+    "set-status": "Grant a role when a custom status contains a keyword.",
+    "say": "Make the bot send an embed message.",
+    "embed": "Send a custom embed from JSON.",
+    "8ball": "Ask the magic 8-ball a question.",
+    "coinflip": "Flip a coin.",
+    "roll": "Roll a dice. Optional: number of sides.",
+    "rate": "Rate anything from 0 to 100.",
+    "poker": "Start a Poker activity in your voice channel.",
+    "chess": "Start a Chess activity in your voice channel.",
+    "checkers": "Start a Checkers activity in your voice channel.",
+    "fishing": "Start a Fishing activity in your voice channel.",
+    "betrayal": "Start a Betrayal activity in your voice channel.",
+    "letterleague": "Start a Letter League activity in your voice channel.",
+    "wordsnack": "Start a Word Snack activity in your voice channel.",
+    "doodlecrew": "Start a Doodle Crew activity in your voice channel.",
+    "spellcast": "Start a Spellcast activity in your voice channel.",
+    "ankword": "Start an Ankword activity in your voice channel.",
+    "puttparty": "Start a Putt Party activity in your voice channel.",
+    "youtube": "Start a Watch Together activity in your voice channel.",
+    "ping": "Check the bot latency.",
+    "help": "Show commands you are allowed to use.",
+    "setprefix": "Change the bot prefix for this server.",
+    "stat": "Show how many servers the bot is in.",
+    "support": "Get the XLR community Discord invite.",
+    "patchnotes": "Show the latest XLR bot patch notes.",
+    "allservers": "List every server the bot is connected to.",
+    "leave": "Make the bot leave a server.",
+    "setstatus": "Change the bot playing status.",
+    "join": "Make the bot join your voice channel.",
+    "token": "Security reminder about bot tokens.",
+}
+
+
+def guild_owner_only():
+    async def predicate(ctx):
+        if not ctx.guild:
+            raise commands.NoPrivateMessage()
+        if ctx.author.id != ctx.guild.owner_id:
+            raise commands.CheckFailure("Only the server owner can use this command.")
+        return True
+    return commands.check(predicate)
+
+
+def bot_owner_only():
+    async def predicate(ctx):
+        owner_id = discord_owner_id()
+        if not owner_id or str(ctx.author.id) != str(owner_id):
+            raise commands.CheckFailure("Only the bot owner can use this command.")
+        return True
+    return commands.check(predicate)
+
+
+def command_description(command):
+    if command.help:
+        return command.help
+    return COMMAND_DESCRIPTIONS.get(command.name, "No description available.")
+
+
+async def user_can_run_command(ctx, command):
+    if command.hidden or not command.enabled:
+        return False
+    cog = command.cog
+    if cog and getattr(cog, "category", None) == CATEGORY_OWNER:
+        if not ctx.guild or ctx.author.id != ctx.guild.owner_id:
+            return False
+    try:
+        await command.can_run(ctx)
+        return True
+    except commands.CommandError:
+        return False
+
+
+async def build_help_pages(ctx, bot, prefix):
+    pages = {}
+    for command in bot.commands:
+        if not command.cog:
+            continue
+        if not await user_can_run_command(ctx, command):
+            continue
+        category = getattr(command.cog, "category", command.cog.__class__.__name__)
+        pages.setdefault(category, []).append((command.name, command_description(command)))
+    categories = [cat for cat in CATEGORY_ORDER if pages.get(cat)]
+    for category in pages:
+        if category not in categories:
+            categories.append(category)
+    for category in pages:
+        pages[category].sort(key=lambda item: item[0])
+    return categories, pages
+
+
 class HelpView(discord.ui.View):
-    def __init__(self, bot, author_id, categories, prefix):
+    def __init__(self, bot, author_id, categories, pages, prefix):
         super().__init__(timeout=120)
         self.bot = bot
         self.author_id = author_id
         self.categories = categories
+        self.pages = pages
         self.prefix = prefix
         self.page = 0
 
@@ -341,29 +507,29 @@ class HelpView(discord.ui.View):
         return True
 
     def build_embed(self):
+        if not self.categories:
+            return xlr_embed(self.bot, title="Help", description="You do not have access to any commands here.")
         category = self.categories[self.page]
-        lines = []
-        for cmd in sorted(self.bot.commands, key=lambda c: c.name):
-            if cmd.hidden or not cmd.cog:
-                continue
-            cat = getattr(cmd.cog, "category", cmd.cog.__class__.__name__)
-            if cat != category:
-                continue
-            desc = cmd.help or cmd.brief or "No description."
-            lines.append(f"`{self.prefix}{cmd.name}`\n{desc}")
+        lines = [f"`{self.prefix}{name}`\n{desc}" for name, desc in self.pages.get(category, [])]
         return xlr_embed(
             self.bot,
             title=f"Help · {category}",
-            description="\n\n".join(lines)[:4000] or "No commands in this category.",
+            description="\n\n".join(lines)[:4000] or "No commands available in this category.",
         ).set_footer(text=f"Page {self.page + 1}/{len(self.categories)} · XLR EU · Black Ops II")
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
     async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.categories:
+            await interaction.response.defer()
+            return
         self.page = (self.page - 1) % len(self.categories)
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.categories:
+            await interaction.response.defer()
+            return
         self.page = (self.page + 1) % len(self.categories)
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 

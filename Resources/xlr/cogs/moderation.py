@@ -7,8 +7,7 @@ from discord.ext import commands
 from xlr_bot_core import (
     XLR_DANGER,
     add_warn,
-    discord_owner_id,
-    format_duration_ms,
+    bot_owner_only,
     parse_duration,
     send_mod_log,
     xlr_embed,
@@ -232,10 +231,8 @@ class Moderation(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="gban")
+    @bot_owner_only()
     async def gban(self, ctx, user: discord.User = None, *, reason: str = "Global ban"):
-        if str(ctx.author.id) != discord_owner_id():
-            await ctx.send(embed=xlr_embed(self.bot, description="This command is owner-only."))
-            return
         if not user:
             await ctx.send(embed=xlr_embed(self.bot, description="Usage: `gban @user [reason]` or `gban <userId> [reason]`"))
             return
@@ -253,10 +250,8 @@ class Moderation(commands.Cog):
         await ctx.send(embed=xlr_embed(self.bot, description=f"Globally banned {user.mention} across **{count}** server(s)."))
 
     @commands.command(name="gunban")
+    @bot_owner_only()
     async def gunban(self, ctx, user: discord.User = None):
-        if str(ctx.author.id) != discord_owner_id():
-            await ctx.send(embed=xlr_embed(self.bot, description="This command is owner-only."))
-            return
         if not user:
             await ctx.send(embed=xlr_embed(self.bot, description="Usage: `gunban @user` or `gunban <userId>`"))
             return

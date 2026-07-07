@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 
 from xlr_bot_core import (
+    CATEGORY_OWNER,
     SECURITY_KEYS,
     get_prefix_value,
     get_settings,
@@ -15,10 +16,18 @@ from xlr_bot_views import CaptchaView, TicketPanelView
 
 
 class Administration(commands.Cog):
-    category = "Administration"
+    category = CATEGORY_OWNER
 
     def __init__(self, bot):
         self.bot = bot
+
+    async def cog_check(self, ctx):
+        if not ctx.guild:
+            return False
+        if ctx.author.id != ctx.guild.owner_id:
+            await ctx.send(embed=xlr_embed(self.bot, description="Only the server owner can use owner commands."))
+            return False
+        return True
 
     async def toggle_setting(self, ctx, setting, label):
         settings = await get_settings(self.bot.store, ctx.guild.id)
@@ -34,57 +43,46 @@ class Administration(commands.Cog):
         await ctx.send(embed=xlr_embed(self.bot, description=f"**{profile}** profile has been **{state}**."))
 
     @commands.command(name="antibot")
-    @commands.has_permissions(administrator=True)
     async def antibot(self, ctx):
         await self.toggle_setting(ctx, "antibot", "Anti-Bot")
 
     @commands.command(name="antichannel")
-    @commands.has_permissions(administrator=True)
     async def antichannel(self, ctx):
         await self.toggle_setting(ctx, "antichannel", "Anti-Channel")
 
     @commands.command(name="antilink")
-    @commands.has_permissions(manage_messages=True)
     async def antilink(self, ctx):
         await self.toggle_setting(ctx, "antilink", "Anti-Link")
 
     @commands.command(name="antiban")
-    @commands.has_permissions(administrator=True)
     async def antiban(self, ctx):
         await self.toggle_setting(ctx, "antiban", "Anti-Ban")
 
     @commands.command(name="antiguildupdate")
-    @commands.has_permissions(administrator=True)
     async def antiguildupdate(self, ctx):
         await self.toggle_setting(ctx, "antiguildupdate", "Anti-Guild Update")
 
     @commands.command(name="anticreateinvite")
-    @commands.has_permissions(administrator=True)
     async def anticreateinvite(self, ctx):
         await self.toggle_setting(ctx, "anticreateinvite", "Anti-Invite Create")
 
     @commands.command(name="antikick")
-    @commands.has_permissions(administrator=True)
     async def antikick(self, ctx):
         await self.toggle_setting(ctx, "antikick", "Anti-Kick")
 
     @commands.command(name="antimassban")
-    @commands.has_permissions(administrator=True)
     async def antimassban(self, ctx):
         await self.toggle_setting(ctx, "antimassban", "Anti-Mass Ban")
 
     @commands.command(name="antimasskick")
-    @commands.has_permissions(administrator=True)
     async def antimasskick(self, ctx):
         await self.toggle_setting(ctx, "antimasskick", "Anti-Mass Kick")
 
     @commands.command(name="antiraid")
-    @commands.has_permissions(administrator=True)
     async def antiraid(self, ctx):
         await self.toggle_setting(ctx, "antiraid", "Anti-Raid")
 
     @commands.command(name="anti-mass-mention")
-    @commands.has_permissions(administrator=True)
     async def antimassmention(self, ctx):
         await self.toggle_setting(ctx, "antimassmention", "Anti-Mass Mention")
 
@@ -94,29 +92,24 @@ class Administration(commands.Cog):
         await self.toggle_setting(ctx, "antispam", "Anti-Spam")
 
     @commands.command(name="secur-max")
-    @commands.has_permissions(administrator=True)
     async def secur_max(self, ctx):
         await self.set_all_security(ctx, True, "Maximum Security")
 
     @commands.command(name="secur-on")
-    @commands.has_permissions(administrator=True)
     async def secur_on(self, ctx):
         await self.set_all_security(ctx, True, "Standard Security")
 
     @commands.command(name="secur-off")
-    @commands.has_permissions(administrator=True)
     async def secur_off(self, ctx):
         await self.set_all_security(ctx, False, "All Security")
 
     @commands.command(name="secur")
-    @commands.has_permissions(administrator=True)
     async def secur(self, ctx):
         settings = await get_settings(self.bot.store, ctx.guild.id)
         lines = [f"{'🟢' if settings.get(key) else '🔴'} `{key}`" for key in SECURITY_KEYS]
         await ctx.send(embed=xlr_embed(self.bot, title="Security Modules", description="\n".join(lines)))
 
     @commands.command(name="whitelist")
-    @commands.has_permissions(administrator=True)
     async def whitelist(self, ctx, action: str = "", member: discord.Member = None):
         action = action.lower()
         key = "whitelist"
@@ -145,7 +138,6 @@ class Administration(commands.Cog):
         )
 
     @commands.command(name="setup-captcha")
-    @commands.has_permissions(administrator=True)
     async def setup_captcha(self, ctx, channel: discord.TextChannel = None, role: discord.Role = None):
         channel = channel or ctx.channel
         if not role:
@@ -163,14 +155,12 @@ class Administration(commands.Cog):
         await ctx.send(embed=xlr_embed(self.bot, description=f"Captcha system set in {channel.mention} with role {role.mention}."))
 
     @commands.command(name="setup-logs")
-    @commands.has_permissions(administrator=True)
     async def setup_logs(self, ctx, channel: discord.TextChannel = None):
         channel = channel or ctx.channel
         self.bot.store.set(ctx.guild.id, "logs", str(channel.id))
         await ctx.send(embed=xlr_embed(self.bot, description=f"Log channel set to {channel.mention}."))
 
     @commands.command(name="setup-autorole")
-    @commands.has_permissions(administrator=True)
     async def setup_autorole(self, ctx, role: discord.Role = None):
         if not role:
             prefix = await get_prefix_value(self.bot.store, ctx.guild.id)
@@ -186,7 +176,6 @@ class Administration(commands.Cog):
         )
 
     @commands.command(name="scan-members", aliases=["scan-membre"])
-    @commands.has_permissions(manage_roles=True)
     async def scan_members(self, ctx, role: discord.Role = None):
         role_id = self.bot.store.get(ctx.guild.id, "autorole")
         role = role or (ctx.guild.get_role(int(role_id)) if role_id else None)
@@ -231,7 +220,6 @@ class Administration(commands.Cog):
         )
 
     @commands.command(name="setup-ticket")
-    @commands.has_permissions(administrator=True)
     async def setup_ticket(self, ctx, channel: discord.TextChannel = None):
         if not channel:
             await ctx.send(embed=xlr_embed(self.bot, description="Please mention a channel for the ticket panel."))
