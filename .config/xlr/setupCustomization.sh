@@ -4,6 +4,82 @@ if [ "$1" = "--install" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
+xlr_apply_gsc_placeholders() {
+    local file="$1"
+    local invite="$2"
+    local owner_name="$3"
+    local owner_id="$4"
+    local owner_tag="$5"
+    local owner_name_color="$6"
+    local owner_text_color="$7"
+    local lang_fr_code="$8"
+
+    sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_NAME|${owner_name}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_ID|${owner_id}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$file" 2>/dev/null || true
+    sed -i "s|PLACEHOLDER_LANG_FR_CODE|${lang_fr_code}|g" "$file" 2>/dev/null || true
+}
+
+xlr_deploy_one_gsc() {
+    local workdir="$1"
+    local src_name="$2"
+    local dest_name="$3"
+    local required="$4"
+    local invite="$5"
+    local owner_name="$6"
+    local owner_id="$7"
+    local owner_tag="$8"
+    local owner_name_color="$9"
+    local owner_text_color="${10}"
+    local lang_fr_code="${11}"
+
+    local gsc_src="$workdir/Resources/gsc/mp/$src_name"
+    local gsc_dest_dir="$workdir/Plutonium/storage/t6/scripts/mp"
+    local gsc_build="$workdir/.build/gsc"
+    local build_file="$gsc_build/$src_name"
+    local dest_file="$gsc_dest_dir/$dest_name"
+    local backup_file="$dest_file.bak"
+    local log_file="$gsc_dest_dir/${dest_name%.gsc}.compile.log"
+
+    mkdir -p "$gsc_dest_dir" "$gsc_build"
+
+    if [ ! -f "$gsc_src" ]; then
+        echo "[XLR] WARN: missing GSC source $gsc_src" >&2
+        return 1
+    fi
+
+    if [ -f "$dest_file" ] && xlr_gsc_looks_compiled "$dest_file"; then
+        cp -f "$dest_file" "$backup_file"
+    fi
+
+    cp "$gsc_src" "$build_file"
+    xlr_apply_gsc_placeholders "$build_file" "$invite" "$owner_name" "$owner_id" "$owner_tag" "$owner_name_color" "$owner_text_color" "$lang_fr_code"
+
+    if xlr_compile_gsc_file "$workdir" "$build_file" "$dest_file" "$log_file"; then
+        echo "[XLR] deployed $dest_name (compiled)"
+        return 0
+    fi
+
+    echo "[XLR] ERROR: failed to compile $src_name" >&2
+    if [ -f "$backup_file" ] && xlr_gsc_looks_compiled "$backup_file"; then
+        cp -f "$backup_file" "$dest_file"
+        echo "[XLR] restored previous compiled $dest_name from backup" >&2
+        return 0
+    fi
+
+    rm -f "$dest_file"
+    if [ "$required" = "required" ]; then
+        echo "[XLR] CRITICAL: no valid $dest_name — map load may fail if invalid gsc remains" >&2
+        return 1
+    fi
+
+    echo "[XLR] optional $dest_name skipped — welcome script still active" >&2
+    return 0
+}
+
 setupCustomization() {
     local workdir="${WORKDIR}"
     local config_file="$workdir/Plutonium/server_config.json"
@@ -24,34 +100,21 @@ setupCustomization() {
     owner_text_color=$(jq -r '.customization.owner.chat_text_color // "6"' "$config_file")
     lang_fr_code=$(jq -r '.customization.owner.lang_fr_code // 1' "$config_file")
 
-    local gsc_src="$workdir/Resources/gsc/mp/xlr_messages.gsc"
-    local gsc_dest="$workdir/Plutonium/storage/t6/scripts/mp"
-    local gsc_build="$workdir/.build/gsc"
-    mkdir -p "$gsc_dest" "$gsc_build"
+    local gsc_dest_dir="$workdir/Plutonium/storage/t6/scripts/mp"
+    mkdir -p "$gsc_dest_dir"
 
-    if [ -f "$gsc_src" ]; then
-        cp "$gsc_src" "$gsc_build/xlr_messages.gsc"
-        sed -i "s|discord.gg/63FAj2ZMrN|${invite}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_NAME|${owner_name}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_ID|${owner_id}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
-        sed -i "s|PLACEHOLDER_LANG_FR_CODE|${lang_fr_code}|g" "$gsc_build/xlr_messages.gsc" 2>/dev/null || true
+    # shellcheck source=/dev/null
+    source "$workdir/.config/xlr/compileGsc.sh"
 
-        # shellcheck source=/dev/null
-        source "$workdir/.config/xlr/compileGsc.sh"
-        if xlr_compile_gsc_file "$workdir" "$gsc_build/xlr_messages.gsc" "$gsc_dest/xlr_messages.gsc" "$gsc_dest/xlr_messages.compile.log"; then
-            echo "[XLR] GSC deployed (compiled) owner=${owner_name} id=${owner_id} lang_fr=${lang_fr_code}"
-        else
-            echo "[XLR] WARN: compile failed — keeping last working GSC if present; check $gsc_dest/xlr_messages.compile.log"
-            if [ ! -f "$gsc_dest/xlr_messages.gsc" ] || ! xlr_gsc_looks_compiled "$gsc_dest/xlr_messages.gsc" 2>/dev/null; then
-                echo "[XLR] ERROR: no valid compiled GSC on disk — server may not load maps with new features"
-            fi
-        fi
-    else
-        echo "[XLR] WARN: missing GSC source $gsc_src"
-    fi
+    # Legacy monolithic script — SOURCE text here = "Server is not running a map"
+    xlr_purge_invalid_gsc "$gsc_dest_dir/xlr_messages.gsc"
+    rm -f "$gsc_dest_dir/xlr_messages.gsc" "$gsc_dest_dir/xlr_messages.gsc.bak"
+
+    xlr_deploy_one_gsc "$workdir" "xlr_welcome.gsc" "xlr_welcome.gsc" "required" \
+        "$invite" "$owner_name" "$owner_id" "$owner_tag" "$owner_name_color" "$owner_text_color" "$lang_fr_code"
+
+    xlr_deploy_one_gsc "$workdir" "xlr_owner.gsc" "xlr_owner.gsc" "optional" \
+        "$invite" "$owner_name" "$owner_id" "$owner_tag" "$owner_name_color" "$owner_text_color" "$lang_fr_code"
 
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do
         [ ! -f "$mp_main/$cfg" ] && continue

@@ -63,6 +63,32 @@ xlr_gsc_looks_compiled() {
     [ "$first" = "128" ]
 }
 
+xlr_gsc_looks_source() {
+    local file="$1"
+    [ -f "$file" ] || return 1
+    local first
+    first="$(head -c 1 "$file" | od -An -tu1 2>/dev/null | tr -d ' ')"
+    [ "$first" = "35" ]
+}
+
+xlr_purge_invalid_gsc() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+
+    if xlr_gsc_looks_source "$file"; then
+        echo "[XLR] REMOVING invalid SOURCE gsc (breaks map load): $file" >&2
+        rm -f "$file"
+        return 0
+    fi
+
+    if ! xlr_gsc_looks_compiled "$file"; then
+        echo "[XLR] REMOVING invalid gsc (not compiled binary): $file" >&2
+        rm -f "$file"
+    fi
+}
+
 xlr_compile_gsc_file() {
     local workdir="$1"
     local source_file="$2"
