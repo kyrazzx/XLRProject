@@ -24,6 +24,7 @@ if [ ! -x "$UPDATER" ]; then
 fi
 
 if [ -f "$BOOTSTRAPPER" ]; then
+    chmod +x "$BOOTSTRAPPER" 2>/dev/null || true
     printf "Plutonium bootstrapper already installed: %s\n" "$BOOTSTRAPPER"
     exit 0
 fi
@@ -32,6 +33,7 @@ printf "Downloading Plutonium server files (this may take a few minutes)...\n"
 "$UPDATER" -d "$PLUTONIUM_DIR" 2>&1 | tee "$PLUTONIUM_DIR/logs/updater.log"
 
 if [ -f "$BOOTSTRAPPER" ]; then
+    chmod +x "$BOOTSTRAPPER" 2>/dev/null || true
     printf "Success: %s\n" "$BOOTSTRAPPER"
     exit 0
 fi

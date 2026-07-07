@@ -18,7 +18,7 @@ setupSecurityConfig() {
     "sv_maxPing": 800,
     "sv_maxRate": 25000,
     "sv_minPing": 0,
-    "sv_pure": true,
+    "sv_pure": false,
     "sv_maxclients": 18,
     "sv_timeout": 240,
     "sv_zombies": false,

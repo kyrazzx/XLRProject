@@ -62,7 +62,7 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 1
+                "sv_pure": 0
             },
             "resource_limits": {
                 "max_cpu_percent": 80,
@@ -85,7 +85,7 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 1
+                "sv_pure": 0
             },
             "resource_limits": {
                 "max_cpu_percent": 80,
@@ -108,7 +108,7 @@
             "rcon_password": "YOURKEY",
             "additional_params": {
                 "sv_maxclients": 18,
-                "sv_pure": 1
+                "sv_pure": 0
             },
             "resource_limits": {
                 "max_cpu_percent": 80,

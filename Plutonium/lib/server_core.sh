@@ -189,6 +189,23 @@ xlr_build_additional_params() {
     echo "$params"
 }
 
+xlr_get_run_user_home() {
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        getent passwd "$SUDO_USER" | cut -d: -f6
+        return 0
+    fi
+    echo "$HOME"
+}
+
+xlr_prepare_bootstrapper() {
+    local bootstrapper="$1"
+    if [ ! -f "$bootstrapper" ]; then
+        return 1
+    fi
+    chmod +x "$bootstrapper" 2>/dev/null || true
+    return 0
+}
+
 xlr_update_plutonium() {
     local install_dir="$1"
     if [ -x "$install_dir/plutonium-updater" ]; then
@@ -201,7 +218,7 @@ xlr_ensure_plutonium_bootstrapper() {
     local install_dir="$1"
     local bootstrapper="$install_dir/bin/plutonium-bootstrapper-win32.exe"
 
-    if [ -f "$bootstrapper" ]; then
+    if xlr_prepare_bootstrapper "$bootstrapper"; then
         return 0
     fi
 
@@ -211,7 +228,7 @@ xlr_ensure_plutonium_bootstrapper() {
 
     mkdir -p "$install_dir/logs"
     "$install_dir/plutonium-updater" -d "$install_dir" >> "$install_dir/logs/updater.log" 2>&1
-    [ -f "$bootstrapper" ]
+    xlr_prepare_bootstrapper "$bootstrapper"
 }
 
 xlr_launch_server_process() {
@@ -219,9 +236,11 @@ xlr_launch_server_process() {
     local server_config="$2"
 
     local install_dir game_path game_mode server_key server_port config_file_name mod server_name server_id
-    local log_dir stdout_log additional_params gamesetting
+    local log_dir stdout_log additional_params gamesetting bootstrapper wine_home
 
     install_dir=$(xlr_get_install_dir "$config_file")
+    bootstrapper="$install_dir/bin/plutonium-bootstrapper-win32.exe"
+    wine_home=$(xlr_get_run_user_home)
     server_id=$(echo "$server_config" | jq -r '.id')
     server_name=$(echo "$server_config" | jq -r '.name')
     game_path=$(echo "$server_config" | jq -r '.game_path')
@@ -253,12 +272,19 @@ xlr_launch_server_process() {
     xlr_write_log "$log_dir" "$server_id" "Starting $server_name on port $server_port"
 
     nohup bash -c "
+        export WINEPREFIX=\"$wine_home/.wine\"
+        export WINEDEBUG=\"-all\"
+        export WINEARCH=\"win64\"
+        export XDG_RUNTIME_DIR=\"/tmp/xlr-runtime-\$\$\"
+        mkdir -p \"\$XDG_RUNTIME_DIR\"
+        chmod 700 \"\$XDG_RUNTIME_DIR\"
+        cd \"$install_dir\" || exit 1
         while true; do
-            nice -n -10 wine ./bin/plutonium-bootstrapper-win32.exe $game_mode $game_path -dedicated \
-                +set key $server_key \
-                +set fs_game $mod \
-                +set net_port $server_port \
-                +exec $config_file_name \
+            nice -n -10 wine \"$bootstrapper\" \"$game_mode\" \"$game_path\" -dedicated \
+                +set key \"$server_key\" \
+                +set fs_game \"$mod\" \
+                +set net_port \"$server_port\" \
+                +exec \"$config_file_name\" \
                 $gamesetting_param \
                 $additional_params \
                 +map_rotate \
