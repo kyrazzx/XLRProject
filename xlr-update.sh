@@ -107,7 +107,12 @@ run_light_post_update() {
     setupCustomization || true
     # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --import
-    setupDdosProtection "$CONFIG_FILE" || true
+    if [ "$(id -u)" -eq 0 ]; then
+        setupDdosProtection "$CONFIG_FILE" || true
+    else
+        sudo XLR_CONFIG_FILE="$CONFIG_FILE" bash "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --install \
+            || echo "[XLR] WARN: anti-DDoS not applied — run: sudo bash $DEFAULT_DIR/.config/security/setupDdosProtection.sh --install"
+    fi
 }
 
 FULL_CONFIGURE=0
@@ -187,6 +192,9 @@ echo "  jq '.servers[] | {id, enabled, key: .key[0:6]}' $CONFIG_FILE"
 echo ""
 echo "Restart game servers without sudo:"
 echo "  cd $DEFAULT_DIR/Plutonium && ./XLRManager.sh restart all"
+echo ""
+echo "Re-apply anti-DDoS (needs sudo):"
+echo "  sudo bash $DEFAULT_DIR/.config/security/setupDdosProtection.sh --install"
 echo ""
 echo "Restart services:"
 echo "  sudo systemctl restart xlr-player-tracker.service"

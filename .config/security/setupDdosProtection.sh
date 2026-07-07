@@ -48,7 +48,12 @@ EOF
 }
 
 setupDdosProtection() {
-    local config_file="${1:-$WORKDIR/Plutonium/server_config.json}"
+    local config_file="${1:-${XLR_CONFIG_FILE:-$WORKDIR/Plutonium/server_config.json}}"
+
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "[XLR] setupDdosProtection requires root (use: sudo bash .config/security/setupDdosProtection.sh --install)"
+        return 1
+    fi
 
     if [ ! -f "$config_file" ]; then
         return 1
@@ -196,7 +201,7 @@ xlr_show_ddos_status() {
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--install" ]; then
-    setupDdosProtection
+    setupDdosProtection "${XLR_CONFIG_FILE:-}"
 elif [ "$1" = "--status" ]; then
     xlr_show_ddos_status
 else
