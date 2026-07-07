@@ -109,7 +109,20 @@ xlr_server_state_file() {
 
 xlr_find_server_pid() {
     local port="$1"
-    pgrep -f "plutonium-bootstrapper-win32.exe.*net_port $port" | head -n 1
+    local pid comm cmdline
+    while IFS= read -r pid; do
+        [ -z "$pid" ] && continue
+        comm=$(ps -p "$pid" -o comm= 2>/dev/null | tr -d ' ')
+        case "$comm" in
+            bash|sh|nohup|runuser|sudo|sleep|nice) continue ;;
+        esac
+        cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+        if echo "$cmdline" | grep -Eq "net_port[[:space:]]+\"?${port}\"?"; then
+            echo "$pid"
+            return 0
+        fi
+    done < <(pgrep -f "plutonium-bootstrapper-win32.exe" 2>/dev/null)
+    return 1
 }
 
 xlr_is_wrapper_running() {

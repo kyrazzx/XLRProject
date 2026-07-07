@@ -146,36 +146,64 @@ SERVER_SHORT_LABELS = {
 
 
 def is_server_running(port):
-    patterns = (
-        f"plutonium-bootstrapper-win32.exe.*net_port {port}",
-        f'net_port "{port}"',
-        f"net_port {port}",
-    )
-    for pattern in patterns:
+    port = int(port)
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "plutonium-bootstrapper-win32.exe"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    for pid in result.stdout.split():
+        if not pid.strip():
+            continue
         try:
-            result = subprocess.run(
-                ["pgrep", "-f", pattern],
+            comm = subprocess.run(
+                ["ps", "-p", pid.strip(), "-o", "comm="],
                 capture_output=True,
                 text=True,
-                timeout=3,
+                timeout=2,
             )
         except (OSError, subprocess.SubprocessError, ValueError):
             continue
-        if result.stdout.strip():
+        if comm.stdout.strip() in {"bash", "sh", "nohup", "runuser", "sudo", "sleep", "nice"}:
+            continue
+        cmdline_path = Path(f"/proc/{pid.strip()}/cmdline")
+        if not cmdline_path.is_file():
+            continue
+        cmdline = cmdline_path.read_bytes().replace(b"\x00", b" ").decode("latin-1", errors="ignore")
+        if re.search(rf"net_port\s+\"?{port}\"?", cmdline):
             return True
     return False
 
 
 def parse_status_player_count(status_text):
+    clients = parse_status_clients(status_text)
+    if clients:
+        return len(clients)
     if not status_text:
         return 0
     match = re.search(r"(\d+)\s+players?\b", status_text, re.I)
     if match:
         return int(match.group(1))
-    return len(parse_status_clients(status_text))
+    return 0
 
 
-def estimate_players_from_stdout(log_path, max_bytes=262144):
+def _stdout_session_lines(lines, port=None):
+    session_start = 0
+    port_token = f":{int(port)}" if port is not None else ""
+    for index, line in enumerate(lines):
+        if "bound socket to" not in line:
+            continue
+        if port_token and port_token not in line:
+            continue
+        session_start = index
+    return lines[session_start:]
+
+
+def estimate_players_from_stdout(log_path, port=None, max_bytes=524288):
     path = Path(log_path)
     if not path.is_file():
         return 0
@@ -186,23 +214,31 @@ def estimate_players_from_stdout(log_path, max_bytes=262144):
             data = handle.read().decode("latin-1", errors="ignore")
     except OSError:
         return 0
+    lines = _stdout_session_lines(data.splitlines(), port)
     online = set()
-    for line in data.splitlines():
+    for line in lines:
         connect = CONNECT_RE.search(line)
         if connect:
             online.add(connect.group(1).lower())
+            continue
         disconnect = DISCONNECT_RE.search(line)
         if disconnect:
             online.discard(disconnect.group(1).lower())
     return len(online)
 
 
-def get_server_player_count(host, port, password, stdout_log=None):
-    count = parse_status_player_count(rcon_query(host, port, password, "status"))
-    if count > 0:
-        return count
+def get_server_player_count(host, port, password, stdout_log=None, max_clients=18):
+    status = rcon_query(host, port, password, "status")
+    clients = parse_status_clients(status)
+    if clients:
+        return min(len(clients), max_clients)
     if stdout_log:
-        return estimate_players_from_stdout(stdout_log)
+        log_count = estimate_players_from_stdout(stdout_log, port=port)
+        if log_count > 0:
+            return min(log_count, max_clients)
+    header_count = parse_status_player_count(status)
+    if header_count > 0:
+        return min(header_count, max_clients)
     return 0
 
 
@@ -223,10 +259,17 @@ def collect_server_statuses(config):
         short = SERVER_SHORT_LABELS.get(sid, sid.upper()[:4])
         online = is_server_running(port)
         players = 0
+        max_clients = int(server.get("additional_params", {}).get("sv_maxclients", 18))
         if online:
             online_servers += 1
             stdout_log = servers_root / sid / "logs" / "stdout.log"
-            players = get_server_player_count(host, port, password, stdout_log)
+            players = get_server_player_count(
+                host,
+                port,
+                password,
+                stdout_log,
+                max_clients=max_clients,
+            )
             total_players += players
         statuses.append(
             {
@@ -244,11 +287,13 @@ def format_discord_presence(statuses, total_players):
     online = [item for item in statuses if item["online"]]
     if not online:
         return "XLR EU | Black Ops II"
+    if len(online) == 1:
+        item = online[0]
+        if total_players:
+            return f"{item['short']} — {total_players} online"[:128]
+        return f"{item['short']} — online"[:128]
     parts = [f"{item['short']} {item['players']}" for item in online]
-    text = " · ".join(parts)
-    if total_players:
-        text = f"{text} — {total_players} online"
-    return text[:128]
+    return " · ".join(parts)[:128]
 
 
 def format_discord_status_lines(statuses):

@@ -62,15 +62,18 @@ class XLRBot(commands.Bot):
         self.config = config
 
     async def setup_hook(self):
-        interval = int(self.config.get("discord_config", {}).get("update_interval", 60))
-        self.status_loop.change_interval(seconds=max(interval, 30))
+        interval = int(self.config.get("discord_config", {}).get("update_interval", 30))
+        self.status_loop.change_interval(seconds=max(interval, 15))
         self.status_loop.start()
         self.reports_loop.start()
 
     async def on_ready(self):
-        await self.change_presence(activity=discord.Game(name="XLR EU | BO2"))
+        statuses, total_players, _ = collect_server_statuses(load_config())
+        await self.change_presence(
+            activity=discord.Game(name=format_discord_presence(statuses, total_players))
+        )
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=30)
     async def status_loop(self):
         self.config = load_config()
         statuses, total_players, _ = collect_server_statuses(self.config)

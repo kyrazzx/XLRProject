@@ -68,7 +68,7 @@
         "status_channel_id": "",
         "reports_channel_id": "",
         "guild_id": "",
-        "update_interval": 60
+        "update_interval": 30
     },
     "iw4madmin_config": {
         "enabled": false,
@@ -97,8 +97,8 @@
                 "sv_anticheat": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 70,
-                "max_memory_mb": 1400
+                "max_cpu_percent": 85,
+                "max_memory_mb": 1700
             }
         },
         {
@@ -121,8 +121,8 @@
                 "sv_anticheat": 1
             },
             "resource_limits": {
-                "max_cpu_percent": 70,
-                "max_memory_mb": 1400
+                "max_cpu_percent": 85,
+                "max_memory_mb": 1700
             }
         },
         {

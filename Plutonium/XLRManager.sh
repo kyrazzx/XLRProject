@@ -181,6 +181,10 @@ xlr_monitor_once() {
         max_memory=$(echo "$server" | jq -r '.resource_limits.max_memory_mb // 4096')
 
         if ! pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
+            if xlr_is_wrapper_running "$port" >/dev/null; then
+                xlr_write_log "$monitoring_log_dir" "$server_id" "Game process down, wrapper will restart"
+                continue
+            fi
             xlr_write_log "$monitoring_log_dir" "$server_id" "Server down, restarting"
             xlr_send_discord_webhook "$webhook_url" "XLR: $server_id is down, restarting..."
             xlr_launch_server_process "$config_file" "$server"
@@ -191,10 +195,13 @@ xlr_monitor_once() {
         current_memory=$(ps -p "$pid" -o rss= 2>/dev/null | awk '{print $1 / 1024}')
         current_cpu=${current_cpu:-0}
         current_memory=${current_memory:-0}
+        local cpu_cores max_cpu_total
+        cpu_cores=$(nproc 2>/dev/null || echo 1)
+        max_cpu_total=$(echo "$max_cpu * $cpu_cores" | bc -l)
 
         xlr_write_log "$monitoring_log_dir" "$server_id" "CPU=${current_cpu}% MEM=${current_memory}MB PID=$pid"
 
-        if (( $(echo "$current_cpu > $max_cpu" | bc -l) )) || (( $(echo "$current_memory > $max_memory" | bc -l) )); then
+        if (( $(echo "$current_cpu > $max_cpu_total" | bc -l) )) || (( $(echo "$current_memory > $max_memory" | bc -l) )); then
             xlr_write_log "$monitoring_log_dir" "$server_id" "Resource limit exceeded, restarting"
             xlr_send_discord_webhook "$webhook_url" "XLR: $server_id exceeded resource limits, restarting..."
             xlr_stop_server "$config_file" "$server"
