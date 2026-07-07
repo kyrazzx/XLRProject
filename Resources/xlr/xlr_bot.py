@@ -11,14 +11,15 @@ from discord.ext import commands, tasks
 from xlr_lib import (
     WORKROOT,
     add_ban,
+    collect_server_statuses,
     connect_db,
     create_report,
     discord_token,
+    format_discord_presence,
+    format_discord_status_lines,
     init_db,
     load_config,
     lookup_player,
-    parse_status_clients,
-    rcon_query,
     remove_ban,
     utc_now,
 )
@@ -40,23 +41,8 @@ def run_manager(*args):
 
 
 def server_status_lines(config):
-    general = config.get("general_config", {})
-    host = general.get("rcon_ip", "127.0.0.1")
-    lines = []
-    for server in config.get("servers", []):
-        if not server.get("enabled", True):
-            continue
-        port = server.get("port")
-        password = server.get("rcon_password") or server.get("key", "")
-        name = server.get("name", server.get("id", "server"))
-        sid = server.get("id")
-        status = rcon_query(host, port, password, "status")
-        if status:
-            players = len(parse_status_clients(status))
-            lines.append(f"**{name}** (`{sid}`) — online — {players} players — port {port}")
-        else:
-            lines.append(f"**{name}** (`{sid}`) — offline — port {port}")
-    return lines
+    statuses, _, _ = collect_server_statuses(config)
+    return format_discord_status_lines(statuses)
 
 
 def moderation_channel_id(config):
@@ -87,9 +73,9 @@ class XLRBot(commands.Bot):
     @tasks.loop(seconds=60)
     async def status_loop(self):
         self.config = load_config()
-        lines = server_status_lines(self.config)
-        summary = " | ".join(line.replace("**", "") for line in lines[:3]) or "XLR EU"
-        await self.change_presence(activity=discord.Game(name=summary[:120]))
+        statuses, total_players, _ = collect_server_statuses(self.config)
+        summary = format_discord_presence(statuses, total_players)
+        await self.change_presence(activity=discord.Game(name=summary))
 
     @tasks.loop(seconds=15)
     async def reports_loop(self):
@@ -158,19 +144,15 @@ def main():
 
     @bot.command(name="players")
     async def players_command(ctx, server_id: str = ""):
-        config_data = load_config()
-        host = config_data.get("general_config", {}).get("rcon_ip", "127.0.0.1")
+        statuses, _, _ = collect_server_statuses(load_config())
         replies = []
-        for server in config_data.get("servers", []):
-            if server_id and server.get("id") != server_id:
+        for item in statuses:
+            if server_id and item["id"] != server_id:
                 continue
-            if not server.get("enabled", True):
-                continue
-            port = server.get("port")
-            password = server.get("rcon_password") or server.get("key", "")
-            response = rcon_query(host, port, password, "status")
-            count = len(parse_status_clients(response))
-            replies.append(f"{server.get('name')} ({server.get('id')}): {count} players")
+            if item["online"]:
+                replies.append(f"{item['name']}: {item['players']} players")
+            else:
+                replies.append(f"{item['name']}: offline")
         await ctx.send("\n".join(replies) or "No data")
 
     @bot.command(name="report")

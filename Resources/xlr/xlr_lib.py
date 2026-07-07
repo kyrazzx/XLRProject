@@ -137,6 +137,130 @@ def rcon_query(host, port, password, command):
     return "".join(chunks)
 
 
+SERVER_SHORT_LABELS = {
+    "ffa": "FFA",
+    "tdm": "TDM",
+    "gungame": "GG",
+    "zombies": "ZM",
+}
+
+
+def is_server_running(port):
+    patterns = (
+        f"plutonium-bootstrapper-win32.exe.*net_port {port}",
+        f'net_port "{port}"',
+        f"net_port {port}",
+    )
+    for pattern in patterns:
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", pattern],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            continue
+        if result.stdout.strip():
+            return True
+    return False
+
+
+def parse_status_player_count(status_text):
+    if not status_text:
+        return 0
+    match = re.search(r"(\d+)\s+players?\b", status_text, re.I)
+    if match:
+        return int(match.group(1))
+    return len(parse_status_clients(status_text))
+
+
+def estimate_players_from_stdout(log_path, max_bytes=262144):
+    path = Path(log_path)
+    if not path.is_file():
+        return 0
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as handle:
+            handle.seek(max(0, size - max_bytes))
+            data = handle.read().decode("latin-1", errors="ignore")
+    except OSError:
+        return 0
+    online = set()
+    for line in data.splitlines():
+        connect = CONNECT_RE.search(line)
+        if connect:
+            online.add(connect.group(1).lower())
+        disconnect = DISCONNECT_RE.search(line)
+        if disconnect:
+            online.discard(disconnect.group(1).lower())
+    return len(online)
+
+
+def get_server_player_count(host, port, password, stdout_log=None):
+    count = parse_status_player_count(rcon_query(host, port, password, "status"))
+    if count > 0:
+        return count
+    if stdout_log:
+        return estimate_players_from_stdout(stdout_log)
+    return 0
+
+
+def collect_server_statuses(config):
+    general = config.get("general_config", {})
+    host = general.get("rcon_ip", "127.0.0.1")
+    servers_root = WORKROOT / "Plutonium" / "servers"
+    statuses = []
+    total_players = 0
+    online_servers = 0
+    for server in config.get("servers", []):
+        if not server.get("enabled", True):
+            continue
+        sid = server.get("id", "server")
+        port = int(server.get("port"))
+        password = server.get("rcon_password") or server.get("key", "")
+        name = server.get("name", sid)
+        short = SERVER_SHORT_LABELS.get(sid, sid.upper()[:4])
+        online = is_server_running(port)
+        players = 0
+        if online:
+            online_servers += 1
+            stdout_log = servers_root / sid / "logs" / "stdout.log"
+            players = get_server_player_count(host, port, password, stdout_log)
+            total_players += players
+        statuses.append(
+            {
+                "id": sid,
+                "name": name,
+                "short": short,
+                "online": online,
+                "players": players,
+            }
+        )
+    return statuses, total_players, online_servers
+
+
+def format_discord_presence(statuses, total_players):
+    online = [item for item in statuses if item["online"]]
+    if not online:
+        return "XLR EU | Black Ops II"
+    parts = [f"{item['short']} {item['players']}" for item in online]
+    text = " · ".join(parts)
+    if total_players:
+        text = f"{text} — {total_players} online"
+    return text[:128]
+
+
+def format_discord_status_lines(statuses):
+    lines = []
+    for item in statuses:
+        if item["online"]:
+            lines.append(f"**{item['name']}** — Online — {item['players']} players")
+        else:
+            lines.append(f"**{item['name']}** — Offline")
+    return lines
+
+
 def parse_status_clients(status_text):
     clients = []
     for line in status_text.splitlines():
@@ -434,6 +558,7 @@ def lookup_player(conn, query):
 
 
 CONNECT_RE = re.compile(r"client\s+'([^']+)'\s+connected", re.I)
+DISCONNECT_RE = re.compile(r"client\s+'([^']+)'\s+disconnected", re.I)
 AUTH_RE = re.compile(r"User with id\s+(\d+)\s+successfully authenticated", re.I)
 LET_PLAYER_RE = re.compile(r"Letting player with userid\s+(\d+)", re.I)
 CLIENT_ENDPOINT_RE = re.compile(r"'(\d{1,3}(?:\.\d{1,3}){3}):\d+'")
