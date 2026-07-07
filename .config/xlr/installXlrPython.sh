@@ -21,9 +21,8 @@ installXlrPython() {
 
     if [ ! -f /etc/xlr/secrets.env ]; then
         cat > /etc/xlr/secrets.env << 'EOF'
-# XLR secrets — never commit this file
-# DISCORD_TOKEN=your_bot_token_here
-# DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+DISCORD_TOKEN=
+DISCORD_WEBHOOK=
 EOF
         chmod 600 /etc/xlr/secrets.env
     fi

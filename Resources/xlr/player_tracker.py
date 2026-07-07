@@ -142,7 +142,7 @@ def maybe_send_auto_message(config, server, state):
     last = state.setdefault(sid, {}).get("last_auto_message", 0)
     if now - last < interval:
         return
-    message = pick_auto_message(config, "en")
+    message = pick_auto_message(config)
     if not message:
         return
     rcon_say(server["host"], server["port"], server["password"], message)

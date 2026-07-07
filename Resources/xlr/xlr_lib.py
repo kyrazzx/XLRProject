@@ -7,7 +7,6 @@ import socket
 import sqlite3
 import subprocess
 import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,10 +14,6 @@ WORKROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = WORKROOT / "Plutonium" / "server_config.json"
 SECRETS_PATH = Path("/etc/xlr/secrets.env")
 DEFAULT_DB_DIR = WORKROOT / "Plutonium" / "storage" / "xlr"
-
-FR_COUNTRIES = frozenset(
-    {"FR", "BE", "CH", "LU", "MC", "RE", "GP", "MQ", "GF", "YT", "PM", "WF", "NC", "PF"}
-)
 
 
 def utc_now():
@@ -379,22 +374,6 @@ def resolve_ips_from_conntrack(port):
     return ips
 
 
-def guess_locale(ip):
-    if not ip or ip.startswith(("10.", "192.168.", "127.")) or ip.startswith("172."):
-        return "en"
-    try:
-        with urllib.request.urlopen(
-            f"http://ip-api.com/json/{ip}?fields=countryCode",
-            timeout=2,
-        ) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            if data.get("countryCode") in FR_COUNTRIES:
-                return "fr"
-    except (OSError, ValueError, json.JSONDecodeError):
-        pass
-    return "en"
-
-
 def rcon_say(host, port, password, message):
     return rcon_query(host, port, password, f"say {message}")
 
@@ -404,8 +383,7 @@ def rcon_tell(host, port, password, client_num, message):
 
 
 def send_player_welcome(server, client, config):
-    locale = guess_locale(client.get("ip", ""))
-    message = welcome_message(config, locale, client["name"])
+    message = welcome_message(config, client["name"])
     host = server["host"]
     port = server["port"]
     password = server["password"]
@@ -417,33 +395,22 @@ def send_player_welcome(server, client, config):
         rcon_tell(host, port, password, client_num, message)
 
 
-def pick_auto_message(config, locale):
+def pick_auto_message(config):
     custom = config.get("customization", {})
-    if locale == "fr":
-        messages = custom.get("auto_messages_fr") or []
-    else:
-        messages = custom.get("auto_messages_en") or []
-    if not messages:
-        messages = custom.get("auto_messages_en") or custom.get("auto_messages_fr") or []
+    messages = custom.get("auto_messages_en") or []
     if not messages:
         return ""
     import random
     return random.choice(messages)
 
 
-def welcome_message(config, locale, player_name):
+def welcome_message(config, player_name):
     custom = config.get("customization", {})
     invite = custom.get("discord_invite", "discord.gg/63FAj2ZMrN")
-    if locale == "fr":
-        template = custom.get(
-            "welcome_chat_fr",
-            "^5[XLR]^7 Bienvenue {player} ! Discord : {discord}",
-        )
-    else:
-        template = custom.get(
-            "welcome_chat_en",
-            "^5[XLR]^7 Welcome {player}! Discord: {discord}",
-        )
+    template = custom.get(
+        "welcome_chat_en",
+        "^5[XLR]^7 Welcome {player}! Discord: {discord}",
+    )
     return template.format(player=player_name, discord=invite)
 
 

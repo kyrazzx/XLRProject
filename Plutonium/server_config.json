@@ -24,18 +24,12 @@
     "customization": {
         "discord_invite": "discord.gg/63FAj2ZMrN",
         "welcome_chat_en": "^6[XLR]^7 Welcome {player}! Discord: {discord} | Report: !report <player> <reason>",
-        "welcome_chat_fr": "^6[XLR]^7 Bienvenue {player} ! Discord : {discord} | Report : !report <joueur> <raison>",
         "motd_en": "^6XLR EU^7 — Fast, DDoS-protected BO2 servers",
-        "motd_fr": "^6XLR EU^7 — Serveurs BO2 rapides, proteges anti-DDoS",
         "welcome_mode": "both",
         "auto_message_interval_seconds": 300,
         "auto_messages_en": [
             "^6[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN",
             "^6[XLR]^7 Report cheaters in chat: !report <player> <reason>"
-        ],
-        "auto_messages_fr": [
-            "^6[XLR]^7 Rejoins le Discord : discord.gg/63FAj2ZMrN",
-            "^6[XLR]^7 Signale les tricheurs : !report <joueur> <raison>"
         ],
         "owner": {
             "enabled": true,
@@ -43,8 +37,7 @@
             "plutonium_id": "6736272",
             "chat_tag": "[OWNER]",
             "chat_name_color": "3",
-            "chat_text_color": "6",
-            "lang_fr_code": 1
+            "chat_text_color": "6"
         }
     },
     "moderation": {

@@ -1,6 +1,4 @@
 #!/bin/bash
-# Plutonium T6 requires COMPILED .gsc (not source text).
-# See: https://forum.plutonium.pw/topic/27664/gsc-tool-error-help
 
 GSC_TOOL_VERSION="${GSC_TOOL_VERSION:-1.4.10}"
 
@@ -93,7 +91,7 @@ xlr_compile_gsc_file() {
     local workdir="$1"
     local source_file="$2"
     local dest_file="$3"
-    local log_file="${4:-$(dirname "$dest_file")/xlr_messages.compile.log}"
+    local log_file="${4:-$(dirname "$dest_file")/xlr_welcome.compile.log}"
     local tools_dir="$workdir/.tools/gsc-tool"
     local gsc_tool compiled_out
 

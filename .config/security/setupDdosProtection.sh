@@ -4,7 +4,6 @@ XLR_SECURITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 XLR_WORKDIR="$(cd "$XLR_SECURITY_DIR/../.." && pwd)"
 
 if [ -f "$XLR_WORKDIR/.config/config.sh" ]; then
-    # shellcheck source=/dev/null
     source "$XLR_WORKDIR/.config/config.sh"
 fi
 

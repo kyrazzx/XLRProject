@@ -100,12 +100,9 @@ run_light_post_update() {
             2>/dev/null || true
     fi
 
-    # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/config.sh"
-    # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/xlr/setupCustomization.sh" --import
     setupCustomization || true
-    # shellcheck source=/dev/null
     source "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --import
     if [ "$(id -u)" -eq 0 ]; then
         setupDdosProtection "$CONFIG_FILE" || true

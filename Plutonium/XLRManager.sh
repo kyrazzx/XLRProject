@@ -312,9 +312,7 @@ xlr_main() {
         sync-iw4m)
             local workdir
             workdir=$(dirname "$(dirname "$XLR_MANAGER_DIR")")
-            # shellcheck source=/dev/null
             source "$workdir/.config/config.sh"
-            # shellcheck source=/dev/null
             source "$workdir/.config/xlr/configureIW4MAdmin.sh" --import
             configureIW4MAdmin
             echo -e "${XLR_COLORS[green]}IW4MAdmin configuration synced${XLR_COLORS[reset]}"

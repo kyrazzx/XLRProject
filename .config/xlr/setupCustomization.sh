@@ -69,9 +69,8 @@ setupCustomization() {
         return 1
     fi
 
-    local motd_en motd_fr invite owner_name owner_id
-    motd_en=$(jq -r '.customization.motd_en // "^5XLR EU^7 — Fast, protected BO2 servers | discord.gg/63FAj2ZMrN"' "$config_file")
-    motd_fr=$(jq -r '.customization.motd_fr // "^5XLR EU^7 — Serveurs BO2 rapides et proteges | discord.gg/63FAj2ZMrN"' "$config_file")
+    local motd invite owner_name owner_id
+    motd=$(jq -r '.customization.motd_en // "^5XLR EU^7 — Fast, protected BO2 servers | discord.gg/63FAj2ZMrN"' "$config_file")
     invite=$(jq -r '.customization.discord_invite // "discord.gg/63FAj2ZMrN"' "$config_file")
     owner_name=$(jq -r '.customization.owner.name // "akan3"' "$config_file")
     owner_id=$(jq -r '.customization.owner.plutonium_id // "0"' "$config_file")
@@ -79,7 +78,6 @@ setupCustomization() {
     local gsc_dest_dir="$workdir/Plutonium/storage/t6/scripts/mp"
     mkdir -p "$gsc_dest_dir"
 
-    # shellcheck source=/dev/null
     source "$workdir/.config/xlr/compileGsc.sh"
 
     xlr_purge_legacy_gsc "$gsc_dest_dir"
@@ -89,14 +87,14 @@ setupCustomization() {
         [ ! -f "$mp_main/$cfg" ] && continue
         [ ! -w "$mp_main/$cfg" ] && continue
         if grep -q '^sets motd' "$mp_main/$cfg" 2>/dev/null; then
-            sed -i "s|^sets motd.*|sets motd \"$motd_en / $motd_fr\"|" "$mp_main/$cfg"
+            sed -i "s|^sets motd.*|sets motd \"$motd\"|" "$mp_main/$cfg"
         else
-            echo "sets motd \"$motd_en / $motd_fr\"" >> "$mp_main/$cfg"
+            echo "sets motd \"$motd\"" >> "$mp_main/$cfg"
         fi
         if grep -q '^seta sv_motd' "$mp_main/$cfg" 2>/dev/null; then
-            sed -i "s|^seta sv_motd.*|seta sv_motd \"$motd_en\"|" "$mp_main/$cfg"
+            sed -i "s|^seta sv_motd.*|seta sv_motd \"$motd\"|" "$mp_main/$cfg"
         else
-            echo "seta sv_motd \"$motd_en\"" >> "$mp_main/$cfg"
+            echo "seta sv_motd \"$motd\"" >> "$mp_main/$cfg"
         fi
         if ! grep -q '^set g_allowvote' "$mp_main/$cfg" 2>/dev/null; then
             echo "set g_allowvote 1" >> "$mp_main/$cfg"
