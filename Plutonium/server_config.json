@@ -36,7 +36,15 @@
         "auto_messages_fr": [
             "^5[XLR]^7 Rejoins le Discord : discord.gg/63FAj2ZMrN",
             "^5[XLR]^7 Signale les tricheurs : !report <joueur> <raison>"
-        ]
+        ],
+        "owner": {
+            "enabled": true,
+            "name": "akan3",
+            "plutonium_id": "6736272",
+            "chat_tag": "[OWNER]",
+            "chat_name_color": "3",
+            "chat_text_color": "5"
+        }
     },
     "moderation": {
         "players_db": "Plutonium/storage/xlr/players.db",

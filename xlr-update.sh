@@ -34,6 +34,7 @@ merge_local_config() {
         .discord_config.token = "" |
         .monitoring_config.discord_webhook = ($old.monitoring_config.discord_webhook // .monitoring_config.discord_webhook) |
         .customization = ($new.customization * ($old.customization // {})) |
+        .customization.owner = ($new.customization.owner * ($old.customization.owner // {})) |
         .security_hardening = ($new.security_hardening * ($old.security_hardening // {})) |
         .moderation = ($new.moderation * ($old.moderation // {})) |
         .servers = [
