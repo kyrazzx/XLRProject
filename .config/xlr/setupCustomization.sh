@@ -34,6 +34,9 @@ setupCustomization() {
         sed -i "s|PLACEHOLDER_OWNER_CHAT_TAG|${owner_tag}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
         sed -i "s|PLACEHOLDER_OWNER_NAME_COLOR|${owner_name_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
         sed -i "s|PLACEHOLDER_OWNER_TEXT_COLOR|${owner_text_color}|g" "$gsc_dest/xlr_messages.gsc" 2>/dev/null || true
+        echo "[XLR] GSC deployed -> $gsc_dest/xlr_messages.gsc (owner=${owner_name} id=${owner_id})"
+    else
+        echo "[XLR] WARN: missing GSC source $gsc_src"
     fi
 
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do

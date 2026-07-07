@@ -6,6 +6,12 @@ init()
     level.callbackPlayerSay = ::xlr_on_player_say;
     level thread onPlayerConnect();
     level thread xlrAutoMessages();
+    xlr_log( "init OK — owner cmds + chat tag active" );
+}
+
+xlr_log( msg )
+{
+    println( "[XLR] " + msg );
 }
 
 xlr_is_owner( player )
@@ -55,12 +61,14 @@ xlr_on_player_say( message, team )
     {
         if ( msg[0] == "!" || msg[0] == "/" )
         {
+            xlr_log( "owner cmd attempt: " + self.name + " -> " + message );
             if ( xlr_try_owner_command( message, msg ) )
                 return false;
 
             return;
         }
 
+        xlr_log( "owner chat restyle: " + self.name + " team=" + team );
         self thread xlr_owner_say_styled( message, team );
         return false;
     }
@@ -86,46 +94,54 @@ xlr_owner_say_styled( message, team_mode )
                 player tell( styled );
         }
 
+        xlr_log( "owner team chat via tell: " + self.name );
         return;
     }
 
     say( styled );
+    xlr_log( "owner global chat via say: " + self.name );
 }
 
 xlr_try_owner_command( message, msg )
 {
     if ( msg == "!ownercmds" || msg == "!help" )
     {
+        xlr_log( "cmd help from " + self.name );
         self xlr_owner_help();
         return true;
     }
 
     if ( msg == "!shake" || msg == "!earthquake" )
     {
+        xlr_log( "cmd shake from " + self.name );
         level thread xlr_cmd_shake();
         return true;
     }
 
     if ( msg == "!boo" )
     {
+        xlr_log( "cmd boo from " + self.name );
         level thread xlr_cmd_boo();
         return true;
     }
 
     if ( msg == "!god" )
     {
+        xlr_log( "cmd god from " + self.name );
         self thread xlr_cmd_god();
         return true;
     }
 
     if ( msg == "!lowgrav" )
     {
+        xlr_log( "cmd lowgrav from " + self.name );
         level thread xlr_cmd_lowgrav();
         return true;
     }
 
     if ( msg == "!slap me" )
     {
+        xlr_log( "cmd slap me from " + self.name );
         self thread xlr_cmd_slap( self );
         return true;
     }
@@ -137,8 +153,10 @@ xlr_try_owner_command( message, msg )
         if ( !isDefined( target ) )
         {
             self iprintlnbold( "^1No player found." );
+            xlr_log( "cmd slap miss target=" + target_name + " by " + self.name );
             return true;
         }
+        xlr_log( "cmd slap " + target.name + " from " + self.name );
         target thread xlr_cmd_slap( target );
         return true;
     }
@@ -150,8 +168,10 @@ xlr_try_owner_command( message, msg )
         if ( !isDefined( target ) )
         {
             self iprintlnbold( "^1No player found." );
+            xlr_log( "cmd fakeban miss target=" + target_name + " by " + self.name );
             return true;
         }
+        xlr_log( "cmd fakeban " + target.name + " from " + self.name );
         foreach ( player in level.players )
             player iprintln( "^1" + target.name + " ^7was banned by admin." );
         return true;
@@ -164,14 +184,17 @@ xlr_try_owner_command( message, msg )
         if ( !isDefined( target ) )
         {
             self iprintlnbold( "^1No player found." );
+            xlr_log( "cmd yeet miss target=" + target_name + " by " + self.name );
             return true;
         }
+        xlr_log( "cmd yeet " + target.name + " from " + self.name );
         target thread xlr_cmd_yeet();
         return true;
     }
 
     if ( msg == "!yeet me" )
     {
+        xlr_log( "cmd yeet me from " + self.name );
         self thread xlr_cmd_yeet();
         return true;
     }
@@ -191,6 +214,7 @@ xlr_cmd_shake()
     Earthquake( 0.7, 4, 0, 2 );
     foreach ( player in level.players )
         player iprintlnbold( "^5[XLR]^7 The ground is shaking..." );
+    xlr_log( "shake executed" );
 }
 
 xlr_cmd_boo()
@@ -200,6 +224,7 @@ xlr_cmd_boo()
         player iprintlnbold( "^1BOO!" );
         player playSound( "evt_alarm" );
     }
+    xlr_log( "boo executed" );
 }
 
 xlr_cmd_god()
@@ -210,11 +235,13 @@ xlr_cmd_god()
     {
         self.xlrGod = false;
         self iprintlnbold( "^5[XLR]^7 God mode ^1OFF" );
+        xlr_log( "god OFF " + self.name );
         return;
     }
 
     self.xlrGod = true;
     self iprintlnbold( "^5[XLR]^7 God mode ^2ON" );
+    xlr_log( "god ON " + self.name );
 
     while ( isDefined( self.xlrGod ) && self.xlrGod )
     {
@@ -229,9 +256,11 @@ xlr_cmd_lowgrav()
     setDvar( "g_gravity", 100 );
     foreach ( player in level.players )
         player iprintlnbold( "^5[XLR]^7 Low gravity for 30 seconds!" );
+    xlr_log( "lowgrav start" );
     wait 30;
     setDvar( "g_gravity", 800 );
     level.lowGravity = false;
+    xlr_log( "lowgrav end" );
 }
 
 xlr_cmd_slap( player )
@@ -242,9 +271,10 @@ xlr_cmd_slap( player )
         return;
 
     player iprintlnbold( "^5[XLR]^7 Slapped!" );
-    player Earthquake( 0.4, 1, player.origin, 1 );
+    Earthquake( 0.4, 1, player.origin, 1 );
     if ( player.health > 25 )
         player.health = player.health - 15;
+    xlr_log( "slap " + player.name );
 }
 
 xlr_cmd_yeet()
@@ -252,9 +282,10 @@ xlr_cmd_yeet()
     self endon( "disconnect" );
 
     self iprintlnbold( "^5[XLR]^7 YEET!" );
-    self Earthquake( 0.3, 1, self.origin, 1 );
+    Earthquake( 0.3, 1, self.origin, 1 );
     if ( self.health > 5 )
         self.health = self.health - 5;
+    xlr_log( "yeet " + self.name );
 }
 
 onPlayerConnect()
@@ -262,6 +293,7 @@ onPlayerConnect()
     for ( ;; )
     {
         level waittill( "connecting", player );
+        xlr_log( "connecting: " + player.name );
         player thread onPlayerSpawned();
         player thread xlr_owner_disconnect_watch();
     }
@@ -276,6 +308,7 @@ xlr_owner_disconnect_watch()
 
     self waittill( "disconnect" );
     level.xlrOwnerAnnounced = undefined;
+    xlr_log( "owner disconnected: " + self.name );
 }
 
 onPlayerSpawned()
@@ -288,6 +321,11 @@ onPlayerSpawned()
     self waittill( "spawned_player" );
     self.xlrWelcomed = true;
 
+    if ( xlr_is_owner( self ) )
+        xlr_log( "spawned: " + self.name + " (owner)" );
+    else
+        xlr_log( "spawned: " + self.name );
+
     self iprintlnbold( "^5XLR EU^7" );
     self iprintln( "^5[XLR]^7 Welcome ^7" + self.name + "^7! Discord: ^5discord.gg/63FAj2ZMrN" );
     self iprintln( "^5[XLR]^7 Bienvenue ^7" + self.name + "^7 ! Discord : ^5discord.gg/63FAj2ZMrN" );
@@ -296,6 +334,7 @@ onPlayerSpawned()
     if ( xlr_is_owner( self ) && !isDefined( level.xlrOwnerAnnounced ) )
     {
         level.xlrOwnerAnnounced = true;
+        xlr_log( "owner announce broadcast: " + self.name );
         foreach ( player in level.players )
         {
             player iprintlnbold( "^5[XLR OWNER]^7 The owner ^7" + self.name + " ^7joined!" );
@@ -313,5 +352,6 @@ xlrAutoMessages()
         wait 300;
         iprintlnbold( "^5[XLR]^7 discord.gg/63FAj2ZMrN" );
         iprintlnbold( "^5[XLR]^7 Report cheaters: !report <player> <reason>" );
+        xlr_log( "auto message broadcast" );
     }
 }
