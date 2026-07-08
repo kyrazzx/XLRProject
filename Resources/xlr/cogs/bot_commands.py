@@ -47,7 +47,7 @@ class BotCommands(commands.Cog):
         self.bot.store.set(ctx.guild.id, "prefix", prefix)
         await ctx.send(embed=xlr_embed(self.bot, description=f"This server's prefix is now `{prefix}`."))
 
-    @commands.command(name="stat", aliases=["stats", "servers"])
+    @commands.command(name="stat", aliases=["servers"])
     async def stat(self, ctx):
         await ctx.send(embed=xlr_embed(self.bot, description=f"I am in **{len(self.bot.guilds)}** servers."))
 
