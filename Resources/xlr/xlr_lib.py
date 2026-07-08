@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import re
 import socket
 import sqlite3
@@ -406,8 +407,55 @@ def pick_auto_message(config):
     messages = custom.get("auto_messages_en") or []
     if not messages:
         return ""
-    import random
     return random.choice(messages)
+
+
+def game_tip_pool(config, conn, server_id):
+    tips = list(config.get("customization", {}).get("auto_messages_en") or [])
+    count = count_unique_players(conn, server_id)
+    if count > 0:
+        tips.append(f"^6[XLR]^7 Unique players since launch: ^6{count}")
+    else:
+        tips.append("^6[XLR]^7 Thanks for playing on XLR EU!")
+    return tips
+
+
+def force_random_game_tip(config=None, server_id="all"):
+    config = config or load_config()
+    target = (server_id or "all").strip().lower()
+    conn = connect_db()
+    init_db(conn)
+    results = []
+    try:
+        for server in iter_enabled_servers(config):
+            sid = server["id"]
+            if target not in ("all", "", "*") and sid != target:
+                continue
+            if not is_server_running(server["port"]):
+                results.append({"server_id": sid, "sent": False, "reason": "offline"})
+                continue
+            tips = game_tip_pool(config, conn, sid)
+            if not tips:
+                results.append({"server_id": sid, "sent": False, "reason": "no tips configured"})
+                continue
+            message = random.choice(tips)
+            host = server["host"]
+            port = server["port"]
+            password = server["password"]
+            status = rcon_query(host, port, password, "status")
+            players = len(parse_status_clients(status))
+            rcon_say(host, port, password, message)
+            results.append(
+                {
+                    "server_id": sid,
+                    "sent": True,
+                    "message": message,
+                    "players": players,
+                }
+            )
+    finally:
+        conn.close()
+    return results
 
 
 def iter_enabled_servers(config):

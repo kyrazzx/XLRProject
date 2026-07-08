@@ -13,6 +13,7 @@ from xlr_lib import (
     connect_db,
     create_report,
     fetch_platform_stats,
+    force_random_game_tip,
     init_db,
     load_config,
     lookup_player,
@@ -87,6 +88,27 @@ class XLRServers(commands.Cog):
             embed.add_field(
                 name=f"{emoji} {item['name']}",
                 value=status,
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+    @commands.command(name="forcetip", aliases=["gametip"])
+    @bot_owner_only()
+    async def forcetip(self, ctx, server_id: str = "all"):
+        results = await asyncio.to_thread(force_random_game_tip, load_config(), server_id)
+        sent = [item for item in results if item.get("sent")]
+        if not sent:
+            embed = xlr_embed(self.bot, description="No tip was sent. Servers may be offline.", color=XLR_DANGER)
+            if results:
+                lines = [f"**{item['server_id']}** — {item.get('reason', 'failed')}" for item in results]
+                embed.add_field(name="Details", value="\n".join(lines), inline=False)
+            await ctx.send(embed=embed)
+            return
+        embed = xlr_embed(self.bot, title="Game Tip Sent", color=XLR_SUCCESS)
+        for item in sent:
+            embed.add_field(
+                name=item["server_id"].upper(),
+                value=f"**{item['players']}** player(s)\n{item['message']}",
                 inline=False,
             )
         await ctx.send(embed=embed)

@@ -394,6 +394,7 @@ COMMAND_DESCRIPTIONS = {
     "setup-ticket": "Deploy the support ticket panel in a channel. Usage: [#channel] or run in the target channel.",
     "status": "Show live status of all XLR BO2 game servers.",
     "stats": "Show XLR server stats: online players, unique players and bans.",
+    "forcetip": "Force a random in-game tip in chat on BO2 servers. Bot owner only. Usage: [ffa|tdm|all]",
     "players": "Show player counts per game server. Optional: server id.",
     "report": "Submit a player report. Usage: <player> <reason>",
     "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP. Bot owner only.",
