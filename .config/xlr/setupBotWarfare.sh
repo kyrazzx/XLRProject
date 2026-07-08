@@ -67,7 +67,7 @@ xlr_apply_bot_warfare_dvars() {
     [ -f "$config_file" ] || return 1
     xlr_bot_warfare_enabled "$config_file" || return 0
 
-    fill=$(jq -r '.bot_warfare.manage_fill // 0' "$config_file")
+    fill=$(jq -r '.bot_warfare.manage_fill // 12' "$config_file")
     skill=$(jq -r '.bot_warfare.skill // 3' "$config_file")
     wait_host=$(jq -r '.bot_warfare.wait_for_host_seconds // 10' "$config_file")
     team_force=$(jq -r '.bot_warfare.team_force // 1' "$config_file")
@@ -79,10 +79,8 @@ xlr_apply_bot_warfare_dvars() {
         cfg_path="$mp_main/$cfg_file"
         [ -f "$cfg_path" ] || continue
 
-        if [ "$fill" = "0" ] || [ -z "$fill" ]; then
-            fill=$(jq -r --arg sid "$server_id" '
-                .servers[] | select(.id == $sid) | .additional_params.sv_maxclients // 18
-            ' "$config_file")
+        if [ "$fill" = "0" ] || [ -z "$fill" ] || [ "$fill" = "null" ]; then
+            fill=12
         fi
 
         for key in bots_main bots_manage_fill bots_manage_fill_kick bots_manage_fill_mode \

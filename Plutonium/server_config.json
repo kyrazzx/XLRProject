@@ -46,7 +46,7 @@
     "bot_warfare": {
         "enabled": true,
         "server_ids": ["tdm"],
-        "manage_fill": 0,
+        "manage_fill": 12,
         "skill": 3,
         "team_force": 1,
         "wait_for_host_seconds": 10,
