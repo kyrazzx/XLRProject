@@ -1,473 +1,350 @@
-# T6 Server - Plutonium Black Ops II Server Installer
+<div align="center">
 
-![Version](https://img.shields.io/badge/Version-3.1.1-blue)
-![Debian](https://img.shields.io/badge/Debian-10%20%7C%2011%20%7C%2012-brightgreen?showLogo=Debian)
+<img src="Resources/xlr/assets/xlr_logo.png" alt="XLR Project" width="160"/>
+
+# XLR Project
+
+**The solution to unplayable servers: stable, secured and protected.**
+Fast EU Black Ops II servers on Plutonium T6 — enjoy the nostalgia without thinking about anything.
+
+![Version](https://img.shields.io/badge/Version-1.0-00A2FF)
+![Debian](https://img.shields.io/badge/Debian-10%20%7C%2011%20%7C%2012-brightgreen?logo=debian)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%20%7C%2024.04-orange?logo=ubuntu)
-![Plutonium T6](https://img.shields.io/badge/Plutonium-T6-blue)
+![Plutonium T6](https://img.shields.io/badge/Plutonium-T6-00A2FF)
 ![License](https://img.shields.io/badge/License-GPL--3.0-yellow)
-![GitHub repo size](https://img.shields.io/github/repo-size/Sterbweise/T6Server)
-![GitHub stars](https://img.shields.io/github/stars/Sterbweise/T6Server)
-![GitHub forks](https://img.shields.io/github/forks/Sterbweise/T6Server)
-![GitHub issues](https://img.shields.io/github/issues/Sterbweise/T6Server)
-![GitHub last commit](https://img.shields.io/github/last-commit/Sterbweise/T6Server)
+![GitHub last commit](https://img.shields.io/github/last-commit/kyrazzx/XLRProject)
 
-<div style="display: flex; align-items: center;">
-    <img src="https://github.com/user-attachments/assets/3ee17ff5-25fa-494e-b874-610507794756" alt="image" width="400"/>
-    <img src="https://imgur.com/bBrx8Hf.png" alt="Plutonium showLogo" width="400" style="margin-left: 10px;"/>
+**[Join the community »](https://discord.gg/63FAj2ZMrN)**
+
 </div>
-
-T6 Server is a comprehensive management suite for setting up and running Plutonium Call of Duty: Black Ops II servers on Debian-based systems. This project aims to simplify the process of installing, configuring, and managing T6 servers, making it accessible to both beginners and experienced server administrators.
-
-<center><b>Full video tutorial:</b> https://www.youtube.com/watch?v=iuTV-8hCv7M</center>
-<br><br>
-
-> ⚠️ During the installation, the game binaries are downloaded using the Plutonium T6 torrent, as this was the historically recommended method for setting up a T6 server and avoids manual file handling for non-technical users.
-> 
-> Due to copyright issues, Plutonium cannot officially support this method publicly in order to avoid legal problems. However, it still works; the limitation is purely for legal reasons.
-> 
-> If you do not want to use this step and prefer to provide your own legally obtained game files, you will currently need to manually adapt the script and point it to your existing game directory.
-
-## Table of Contents
-
-- [T6 Server - Plutonium Black Ops II Server Installer](#t6-server---plutonium-black-ops-ii-server-installer)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-    - [System Requirements](#system-requirements)
-    - [Software Requirements](#software-requirements)
-    - [Network Requirements](#network-requirements)
-    - [Additional Considerations](#additional-considerations)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-    - [New Server Parameters](#new-server-parameters)
-    - [Default Ports](#default-ports)
-    - [Directory Structure](#directory-structure)
-    - [File Organization](#file-organization)
-      - [Custom Mods](#custom-mods)
-      - [Custom Maps](#custom-maps)
-  - [Launching the Server](#launching-the-server)
-  - [Troubleshooting](#troubleshooting)
-    - [Wine Display Errors](#wine-display-errors)
-    - [Unable to Load Import from binkw32.dll](#unable-to-load-import-from-binkw32dll)
-    - [Server Not Appearing in Plutonium Server List](#server-not-appearing-in-plutonium-server-list)
-    - [Authentication Issues](#authentication-issues)
-  - [Documentation](#documentation)
-  - [Contributing](#contributing)
-    - [Submitting Pull Requests](#submitting-pull-requests)
-    - [Ideas for Contributions](#ideas-for-contributions)
-    - [Reporting Issues](#reporting-issues)
-    - [Improving Documentation](#improving-documentation)
-    - [Code Review](#code-review)
-  - [Roadmap](#roadmap)
-    - [Short-term Goals (1-3 months)](#short-term-goals-1-3-months)
-    - [Medium-term Goals (3-6 months)](#medium-term-goals-3-6-months)
-  - [License](#license)
-  - [Acknowledgements](#acknowledgements)
-  - [Support](#support)
-
-## Features
-- Easy installation and uninstallation process
-- Automated system updates and dependency management 
-- Firewall configuration and management with UFW
-- Wine installation for Windows application support
-- .NET Framework installation for IW4MAdmin support
-- Multi-language support (English and French)
-- Server binary installation and configuration
-- User-friendly command-line interface
-- MOD support with custom maps and game modes
-- Advanced server configuration options
-- Automatic server monitoring and resource tracking
-- CPU and memory usage limits
-- Detailed installation/uninstallation summaries
-- System health monitoring and reporting
-- Comprehensive logging and error handling
-- Performance optimization tools
-
-## Prerequisites
-
-### System Requirements
-- **Operating System:** Debian 10, 11, or 12 (64-bit) — Ubuntu 22.04 or 24.04 LTS (64-bit)
-- **Architecture:** x86_64 (AMD64)
-- **RAM:** Minimum 512MB, 2GB recommended
-- **Storage:** At least 15GB of free disk space
-
-### Software Requirements
-- **Root Access:** Full system privileges (root or sudo)
-- **Package Manager:** apt (comes pre-installed on Debian)
-- **Git:** For cloning the repository
-
-If you don't have sudo or git installed, you can install them as follows:
-
-1. To install sudo (as root):
-   ```bash
-   apt install sudo
-   ```
-
-2. To install git:
-   ```bash
-   sudo apt install git
-   ```
-
-These commands will ensure you have the necessary software to proceed with the installation.
-
-### Network Requirements
-- **Internet Connection:** Stable broadband connection
-- **Firewall:** Ability to open and forward necessary ports
-- **Static IP:** Recommended for consistent server accessibility
-
-### Additional Considerations
-- Basic familiarity with Linux command line
-- Understanding of server administration concepts
-- Willingness to troubleshoot potential issues
-
-Ensure all prerequisites are met before proceeding with the installation to guarantee a smooth setup process.
-
-## Installation
-
-1. Navigate to the application installation directory:
-   ```bash
-   cd /opt
-   ```
-
-2. Download and extract T6Server archive in a single command:
-   ```bash
-   mkdir -p T6Server && wget -O T6Server.tar.gz https://github.com/Sterbweise/T6Server/releases/download/v3.1.1/T6Server.tar.gz && tar -xzvf T6Server.tar.gz -C T6Server && rm T6Server.tar.gz
-   ```
-
-3. Move into the newly created T6Server directory:
-   ```bash
-   cd T6Server
-   ```
-
-4. Make the script executable:
-   ```bash
-   chmod +x install.sh
-   ```
-
-5. Launch the installation script with sudo privileges:
-   ```bash
-   sudo ./install.sh
-   ```
-
-6. Follow the on-screen instructions to complete the installation. The script will guide you through:
-   - Language selection
-   - UFW firewall installation and configuration
-   - SSH port configuration
-   - .NET installation (optional, required for IW4MAdmin)
-   - Wine installation
-   - Game binary installation
-
-## Configuration
-
-After installation, the primary configuration file to modify is `/opt/T6Server/T6Server.sh`. This file contains essential settings for your Plutonium Call of Duty: Black Ops II server. Below are the key variables you should configure:
-
-| Variable    | Description                                           | Default Value              |
-|-------------|-------------------------------------------------------|----------------------------|
-| SERVER_NAME | The name of your server as it appears in server lists | "SERVER_NAME"              |
-| GAME_PATH   | Path to your game files (Multiplayer or Zombie mode)  | "/opt/T6Server/Server/Multiplayer" |
-| SERVER_KEY  | Your unique Plutonium server key                      | "YOURKEY"                  |
-| CONFIG_FILE | Server configuration file (mode-specific)             | "dedicated.cfg"            |
-| SERVER_PORT | UDP port your server will listen on                   | 21889                       |
-| GAME_MODE   | Game mode selection ("t6mp" or "t6zm")                | "t6mp"                     |
-| MOD         | Path to your MOD directory (optional)                 | ""                         |
-| ADDITIONAL_PARAMS | Additional parameters for the server (optional) | ""                         |
-
-To configure your server:
-
-1. Open the configuration file:
-   ```bash
-   nano /opt/T6Server/Plutonium/T6Server.sh
-   ```
-
-2. Modify the variables according to your preferences. For example:
-   ```bash
-   readonly SERVER_NAME="My Awesome T6 Server" # The name of your server
-   readonly SERVER_KEY="your_server_key" # Key provided by Plutonium
-   readonly SERVER_PORT=4976 # Default port for T6 servers
-   readonly GAME_MODE="t6mp" # "t6mp" for Multiplayer, "t6zm" for Zombies
-   readonly MOD="mods/weapons" # MOD path
-   readonly ADDITIONAL_PARAMS="" # Additional parameters for the server
-   ```
-
-3. Save the file and exit the editor by pressing `Ctrl+x`, then `Y` to confirm, and Enter to save.
-
-Note: For Zombie mode, set `GAME_PATH` to "/opt/T6Server/Server/Zombie", `CONFIG_FILE` to "dedicated_zm.cfg", and `GAME_MODE` to "t6zm". Also, set the `MOD` variable to the path of the Zombie mode MOD.
-
-Ensure all settings are correctly configured before launching your server.
-
-### New Server Parameters
-- `sv_allowAimAssist`: Enable/disable aim assist (default: 1)
-- `sv_securityLevel`: Server security level (recommended: 23)
-- `sv_kickBareGUID`: Kicks players without valid GUID
-- `sv_allowDof`: Controls depth of field effect
-
-### Default Ports
-- T6 (Black Ops II): 21889 (UDP)
-### Directory Structure
-
-| Directory | Path | Description |
-|-----------|------|-------------|
-| **Mods** | `/opt/T6Server/Plutonium/storage/t6/mods/` | Custom game modifications |
-| **Config - Multiplayer** | `/opt/T6Server/Server/Multiplayer/main/configs/` | Multiplayer configuration files |
-| **Config - Zombie** | `/opt/T6Server/Server/Zombie/main/configs/` | Zombie mode configuration files |
-| **Logs** | `/opt/T6Server/Plutonium/storage/t6/logs/` | Server log files |
-| **Stats** | `/opt/T6Server/Plutonium/storage/t6/stats/` | Player statistics |
-| **Playlists** | `/opt/T6Server/Plutonium/storage/t6/playlists/` | Custom game playlists |
-| **Game Settings** | `/opt/T6Server/Plutonium/storage/t6/gamesettings/` | Game mode settings |
-| **Player Data** | `/opt/T6Server/Plutonium/storage/t6/players/` | Player-specific data |
-| **Scripts** | `/opt/T6Server/Plutonium/storage/t6/scripts/` | Custom game scripts |
-| **Maps - Multiplayer** | `/opt/T6Server/Server/Multiplayer/usermaps/` | Custom multiplayer maps |
-| **Maps - Zombie** | `/opt/T6Server/Server/Zombie/usermaps/` | Custom zombie maps |
-
-To change maps:
-1. Edit the appropriate configuration file:
-   - Multiplayer: `/opt/T6Server/Server/Multiplayer/main/dedicated.cfg`
-   - Zombie: `/opt/T6Server/Server/Zombie/main/dedicated_zm.cfg`
-
-### File Organization
-For proper server organization, place files in these specific directories:
-
-#### Custom Mods
-1. Place mod files in `/opt/T6Server/Plutonium/storage/t6/mods/`
-2. Enable mods by adding to server config:
-   ```cfg
-   set sv_enablemods "1"
-   set fs_game "mods/mod_name"
-   ```
-
-#### Custom Maps
-1. Place custom map files in their respective directories:
-   - Multiplayer maps: `/opt/T6Server/Server/Multiplayer/usermaps/`
-   - Zombie maps: `/opt/T6Server/Server/Zombie/usermaps/`
-
-2. Load custom maps by adding them to the map rotation in the config files:
-   ```cfg
-   // For Multiplayer (in dedicated.cfg)
-   sv_maprotation "map usermaps/custom_map_name map mp_nuketown_2020"
-   sv_maprotationcurrent ""
-   
-   // For Zombies (in dedicated_zm.cfg) 
-   sv_maprotation "map usermaps/custom_zombie_map"
-   sv_maprotationcurrent ""
-   ```
-
-3. Map file organization:
-   - Map files (.ff extension) go directly in the usermaps folder
-   - Supporting files like textures and models should be in a subfolder with the same name as the map
-   - Example structure:
-     ```
-     usermaps/
-     ├── custom_map.ff
-     └── custom_map/
-         ├── textures/
-         ├── models/
-         └── other assets/
-     ```
-
-4. Important notes:
-   - Maps must be in the correct format (.ff files)
-   - File permissions should be set to allow server read access
-   - Map names in rotation must exactly match the filename (without .ff)
-   - Restart server after adding new maps
-
-
-## Launching the Server
-
-To launch your Plutonium Call of Duty: Black Ops II server, follow these professional steps:
-
-1. Navigate to the T6Server installation directory:
-   ```bash
-   cd /opt/T6Server/Plutonium
-   ```
-
-2. Ensure the start script has the necessary execution permissions:
-   ```bash
-   sudo chmod +x T6Server.sh
-   ```
-
-3. Launch the server:
-   ```bash
-   ./T6Server.sh
-   ```
-
-For advanced server management:
-- To run multiple servers concurrently, utilize terminal multiplexers such as `tmux` or `screen`.
-- For background operation, you can use the `nohup` command:
-  ```bash
-  nohup ./T6Server.sh > server.log 2>&1 &
-  ```
-  This will run the server in the background, redirecting output to `server.log`.
-
-Note: Ensure all necessary configurations in `server.cfg` and other relevant files are properly set before launching the server.
-
-## Troubleshooting
-
-This section provides solutions to common issues you may encounter while setting up and running your Plutonium Call of Duty: Black Ops II server. Follow these detailed steps to resolve problems efficiently.
-
-### Wine Display Errors
-
-**Issue**: You may see error messages related to Wine display when starting the server.
-
-**Solution**: These errors are not critical and can be safely ignored. The Plutonium server operates as a console application and does not require graphical support. Your server will function correctly despite these messages.
-
-**Note for debugging**: By default, Wine errors are hidden. If you need to debug Wine-related issues, you can remove the `2>/dev/null` at the end of the server start command in `T6Server.sh`. This will allow Wine errors to be displayed, which can be helpful for troubleshooting.
-
-### Unable to Load Import from binkw32.dll
-
-**Issue**: An error occurs when the server attempts to load binkw32.dll.
-
-**Solution**: 
-1. Verify the `PAT` variable in `T6Server.sh`:
-   - Open the file: `nano /opt/T6Server/T6Server.sh`
-   - Ensure the `PAT` variable is correctly set to your server's path, pointing to the directory containing binkw32.dll:
-     - For Multiplayer: `/opt/T6Server/Server/Multiplayer`
-     - For Zombie mode: `/opt/T6Server/Server/Zombie`
-2. Correct file permissions:
-   ```bash
-   sudo chmod -R 755 /opt/T6Server
-   ```
-3. If the issue persists, try reinstalling the game binaries using the installation script.
-
-### Server Not Appearing in Plutonium Server List
-
-**Issue**: Your server is running but not visible to players in the Plutonium server list.
-
-**Solution**:
-1. Verify port accessibility:
-   - Ensure the server port (default: 4976) is open for UDP traffic
-   - Use a port checking tool to confirm the port is reachable from the internet
-2. Configure your firewall:
-   ```bash
-   sudo ufw allow 4976/udp comment "Plutonium-Server"
-   sudo ufw reload
-   ```
-3. If behind a NAT:
-   - Configure port forwarding on your router
-   - Forward UDP port 4976 to your server's local IP address
-4. Verify server configuration:
-   - Check `server.cfg` for correct settings
-   - Ensure `sv_lanOnly` is set to 0
-
-### Authentication Issues
-
-**Issue**: You encounter authentication errors when starting the server.
-
-**Solution**:
-1. Verify your Plutonium key:
-   - Log in to your Plutonium account at https://platform.plutonium.pw/serverkeys
-   - Confirm your key is valid and not expired
-2. Check key placement:
-   - Open `T6Server.sh`
-   - Ensure the `SERVER_KEY` variable contains your correct key
-3. If issues persist:
-   - Reinstall game binaries using the installation script
-   - Update Plutonium to the latest version
-
-For additional assistance, consult the [Plutonium forums](https://forum.plutonium.pw/) or join the [Plutonium Discord](https://discord.gg/plutonium) community.
-
-## Documentation
-
-For more detailed information on server configuration, configuration options, and advanced features, please refer to our [Wiki](https://github.com/Sterbweise/T6Server/wiki).
-
-## Contributing
-
-I appreciate contributions from the community! Here are some ways you can contribute to the T6 Server project:
-
-### Submitting Pull Requests
-
-1. Fork the repository and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. Ensure your code follows the existing style to maintain consistency.
-4. Update the documentation if you've made changes that affect it.
-5. Write a clear and descriptive commit message.
-6. Open a pull request with a comprehensive description of the changes.
-
-### Ideas for Contributions
-
-- Implement additional server configuration options
-- Improve error handling and logging
-- Enhance the user interface of the management scripts
-- Optimize server performance
-- Improve compatibility with different Debian versions or other Linux distributions
-- Create additional language localizations
-
-### Reporting Issues
-
-- Use the GitHub issue tracker to report bugs
-- Provide a clear and detailed description of the issue
-- Include steps to reproduce the problem
-- Specify your operating system and relevant software versions
-
-### Improving Documentation
-
-- Help improve the README, wiki, or inline code documentation
-- Write tutorials or guides for setting up and managing servers
-- Create or improve troubleshooting guides
-
-### Code Review
-
-- Review pull requests from other contributors
-- Provide constructive feedback and suggestions
-
-I strive to make contributing to T6 Server a positive experience for everyone.
-
-Thank you for helping make T6 Server better!
-
-## Roadmap
-
-T6 Server focuses on enhancing stability, improving user experience, and expanding functionality. Here's what we're planning:
-
-### Short-term Goals (1-3 months)
-
-- [x] Resolve installation issues on various Debian-based distributions
-  - [x] Fix dependency conflicts
-  - [x] Improve error handling during installation
-  - [ ] Create detailed troubleshooting guides
-- [ ] Enhance debugging capabilities
-  - [ ] Implement verbose logging options
-  - [ ] Create a diagnostic tool for common issues
-- [ ] Optimize server performance
-  - [ ] Reduce resource usage
-  - [ ] Improve startup and shutdown times
-
-### Medium-term Goals (3-6 months)
-
-- [ ] Simplify multi-server management
-- [ ] Enhance configuration options
-  - [ ] Add more customizable server settings
-  - [ ] Create configuration templates for popular game modes
-- [ ] Improve update mechanism
-  - [ ] Implement automatic updates with rollback capability
-  - [ ] Add delta updates to reduce bandwidth usage
-
-I'm committed to continuously improving T6 Server based on user feedback and community needs. If you encounter any issues or have suggestions, please don't hesitate to open an issue or contribute to the project!
-
-## License
-
-This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-I would like to express my sincere gratitude to the following projects and their creators for their invaluable contributions to the T6 Server project:
-
-- [Plutonium](https://plutonium.pw): For their exceptional work on the T6 client and server, which forms the foundation of our project. Their dedication to preserving and enhancing classic Call of Duty titles is commendable.
-
-- [IW4MAdmin](https://github.com/RaidMax/IW4M-Admin): I extend my thanks to RaidMax and the IW4MAdmin team for their comprehensive administration tools. Their robust solution significantly enhances server management capabilities.
-
-- [plutonium-updater](https://github.com/mxve/plutonium-updater.rs): Special recognition goes to mxve for developing the plutonium-updater. This tool has been instrumental in streamlining our server update process, ensuring that our servers always run the latest version with minimal downtime.
-
-These projects have been crucial in the development and ongoing improvement of T6 Server. I am deeply appreciative of the hard work and dedication of all contributors involved in these projects.
-
-## Support
-
-For support, please contact:
-
-- Email: [contact@sterbweise.dev](mailto:contact@sterbweise.dev)
-- Telegram: [@SG991](https://t.me/SG991)
-- Discord: [Sterbweise](https://discord.com/users/sterbweise/)
-
-You can also open an issue on this repository for bug reports or feature requests.
 
 ---
 
-Developed with ❤️ by [Sterbweise](https://github.com/Sterbweise)
+## About
+
+**XLR Project** is a full platform built on top of [Plutonium T6](https://plutonium.pw/) to run high-quality European Black Ops II servers. It is not a stock installer — it adds network-level DDoS hardening, a player database, in-game welcome messages and tips, filler bots, and a complete Discord bot to run the community and the infrastructure from one place.
+
+XLR is built and maintained by **akan3** as a long-term home for BO2 players who want servers that are fast, fair, and actually protected.
+
+> This project is a heavily customized fork of [Sterbweise/T6Server](https://github.com/Sterbweise/T6Server). The base installer (Wine, firewall, game binaries) comes from that project; the entire **XLR layer** (security, customization, player tracking, Discord bot, bots) is specific to this repository.
+
+> ⚠️ During installation, game binaries are downloaded through the historical Plutonium T6 torrent method. For legal reasons Plutonium cannot support this publicly. If you prefer to provide your own legally obtained game files, use `import-game-files.sh` and see `Resources/binaries/MANUAL_UPLOAD.txt`.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Managing the servers](#managing-the-servers)
+- [Discord bot](#discord-bot)
+- [In-game experience](#in-game-experience)
+- [Filler bots (Bot Warfare)](#filler-bots-bot-warfare)
+- [Updating](#updating)
+- [Directory structure](#directory-structure)
+- [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
+- [License](#license)
+- [Support](#support)
+
+---
+
+## Features
+
+### Infrastructure & security
+- **Anti-DDoS hardening** — nftables per-IP UDP rate limiting, anti-spoof sysctl tuning, kernel network buffers
+- **Plutonium anti-cheat** — `sv_securityLevel` and `sv_anticheat` enforced at launch
+- **IP ban system** — bans applied both in the database and at the nftables level
+- **Automated backups**, scheduled restarts on idle, and health monitoring via systemd timers
+- Secrets (Discord token, owner ID, webhook) kept out of git in `/etc/xlr/secrets.env`
+
+### Servers
+- **Multi-server manager** (`XLRManager.sh`) — FFA and TDM EU by default, Gun Game / Zombies optional
+- Per-server CPU and memory limits, auto-restart on crash or empty server
+- Custom hostnames, MOTD, and map rotation
+
+### In-game (GSC)
+- Welcome message on spawn (screen + chat)
+- Owner join announcement (screen + chat)
+- Rotating tips in chat (Discord invite, report reminder, unique-player counter, …)
+
+### Player data
+- SQLite database tracking, per connection: names history, Plutonium ID, Steam ID, all IPs
+- Unique-player counter per server, since launch
+- In-game `!report` piped straight to Discord
+
+### Discord bot
+- Live server status, player counts and network stats (`!status`, `!stats`, `!players`)
+- Game moderation from Discord (`!gameban`, `!gameunban`, `!report`, `!lookup`)
+- In-game ban announcement + auto-kick on the affected server
+- Full community bot: moderation, anti-nuke, tickets, captcha, welcome, fun & mini-games
+- Branded XLR embeds (`#00A2FF`), paginated help that only shows commands you can run
+
+### Filler bots
+- [Bot Warfare](https://github.com/ineedbots/t6_bot_warfare) integration for TDM
+- Bots use **real player names pulled from the database** (owner excluded) with an `[XLR]` clan tag
+- Configurable fill count, max difficulty, auto-kick a bot when a real player joins
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph edge [Edge]
+        OVH[Provider Anti-DDoS]
+        NFT[nftables rate-limit UDP]
+    end
+    subgraph game [BO2 Servers]
+        FFA[FFA EU]
+        TDM[TDM EU + Bots]
+    end
+    subgraph mgmt [Management]
+        MGR[XLRManager]
+        TRK[Player Tracker]
+        BK[Backups / Healthcheck]
+    end
+    subgraph discord [Discord]
+        BOT[XLR Bot]
+    end
+    OVH --> NFT --> FFA & TDM
+    MGR --> FFA & TDM
+    FFA & TDM --> TRK --> BOT
+    TRK --> DB[(players.db)]
+```
+
+---
+
+## Requirements
+
+| | |
+|---|---|
+| **OS** | Debian 10 / 11 / 12 or Ubuntu 22.04 / 24.04 (64-bit) |
+| **Arch** | x86_64 (AMD64) |
+| **RAM** | 2 GB minimum; 4 GB+ recommended for FFA + TDM + bots |
+| **Disk** | ~15 GB free |
+| **Access** | root / sudo |
+| **Other** | `git`, stable connection, a [Plutonium server key](https://platform.plutonium.pw/serverkeys) per server |
+
+---
+
+## Installation
+
+```bash
+# 1. Clone
+cd /opt
+git clone https://github.com/kyrazzx/XLRProject.git
+cd XLRProject
+
+# 2. Run the installer
+chmod +x install.sh
+sudo ./install.sh
+```
+
+The installer walks you through language selection, firewall, .NET (for IW4MAdmin), Wine, game binaries, and then deploys the full XLR stack (security, customization, bots, systemd services).
+
+---
+
+## Configuration
+
+The single source of truth is **`Plutonium/server_config.json`**.
+
+Key sections:
+
+| Section | Purpose |
+|---------|---------|
+| `security_hardening` | Anti-DDoS / anti-spoof / rate-limit tuning |
+| `customization` | Discord invite, welcome text, MOTD, tips interval, owner info |
+| `bot_warfare` | Filler bot settings (enabled, servers, fill, skill, clan tag) |
+| `moderation` | Player DB path, in-game report command |
+| `discord_config` | Bot enable flag, channel IDs, guild ID |
+| `servers` | Per-server ports, gametype, keys, resource limits |
+
+**Set your Plutonium key** — replace every `YOURKEY` (`key` and `rcon_password`) in `server_config.json`.
+
+**Secrets** (never committed) live in `/etc/xlr/secrets.env`:
+
+```env
+DISCORD_TOKEN=your_bot_token
+DISCORD_OWNER_ID=your_discord_user_id
+DISCORD_WEBHOOK=optional_webhook_url
+```
+
+```bash
+sudo chmod 600 /etc/xlr/secrets.env
+```
+
+To regenerate configs interactively at any time:
+
+```bash
+sudo ./xlr-configure.sh
+```
+
+---
+
+## Managing the servers
+
+`XLRManager.sh` controls every enabled server at once, or one by id (`ffa`, `tdm`, `all`).
+
+```bash
+cd Plutonium
+
+sudo ./XLRManager.sh start all      # start every enabled server
+sudo ./XLRManager.sh restart tdm    # restart only TDM
+sudo ./XLRManager.sh stop all
+sudo ./XLRManager.sh status         # live status table
+sudo ./XLRManager.sh backup         # run a backup now
+```
+
+systemd services installed by XLR:
+
+| Service | Role |
+|---------|------|
+| `xlr-manager.service` | Starts servers + monitoring + auto-restart |
+| `xlr-player-tracker.service` | Player DB, in-game reports, bot-name sync, ban enforcement |
+| `xlr-discord-bot.service` | The XLR Discord bot |
+
+---
+
+## Discord bot
+
+Enable it in `server_config.json` (`discord_config.enabled = true`), set the token in secrets, then:
+
+```bash
+sudo systemctl enable --now xlr-discord-bot.service
+```
+
+### BO2 server commands
+
+| Command | Access | Action |
+|---------|--------|--------|
+| `!status` | Everyone | Live status of all servers |
+| `!stats` | Everyone | Online players, unique players, active bans |
+| `!players [ffa\|tdm]` | Everyone | Player count per server |
+| `!report <player> <reason>` | Everyone | Submit a report |
+| `!gameban <player\|id\|ip> <reason>` | Admin | Ban from BO2 servers (DB + nftables) + in-game announce & kick |
+| `!gameunban <player\|id\|ip>` | Admin | Remove a game ban |
+| `!lookup <name\|id\|ip>` | Bot owner | Player record (names, IDs, IPs) |
+| `!forcetip [ffa\|tdm\|all]` | Bot owner | Push a random in-game tip immediately |
+| `!restart [ffa\|tdm\|all]` | Admin | Restart game servers |
+| `!dismiss <id>` | Admin | Dismiss a pending report |
+
+Beyond BO2, the bot ships full community tooling: moderation, anti-nuke (`!secur-on`, `!antibot`, …), tickets, captcha, welcome messages, utility, fun and Discord mini-games. Run `!help` for the paginated, permission-aware list.
+
+---
+
+## In-game experience
+
+Handled by the compiled GSC script `Resources/gsc/mp/xlr_welcome.gsc`, deployed and compiled automatically on update:
+
+- **On spawn** — a screen banner + welcome and report reminder in chat
+- **Owner join** — announced to everyone (screen + chat)
+- **Rotating tips** — sent in chat on an interval (`customization.auto_message_interval_seconds`), including a live unique-player counter
+
+All in-game text is English and fully editable from the config / GSC source.
+
+---
+
+## Filler bots (Bot Warfare)
+
+XLR integrates [ineedbots/t6_bot_warfare](https://github.com/ineedbots/t6_bot_warfare) to keep TDM populated.
+
+- Configured under `bot_warfare` in `server_config.json` (TDM only by default)
+- **Max difficulty**, fills up to a configurable total (default **12**), leaving slots free for real players
+- A bot is auto-kicked when a real player connects
+- Bot names are pulled at random from the player database (owner excluded) and tagged **`[XLR]`**, refreshed every few minutes by the player tracker into `Plutonium/storage/t6/bots.txt`
+
+Deploy or refresh manually:
+
+```bash
+sudo bash .config/xlr/setupBotWarfare.sh --install
+sudo bash Plutonium/XLRManager.sh restart tdm
+```
+
+---
+
+## Updating
+
+```bash
+cd ~/XLRProject
+git pull
+./xlr-update.sh
+sudo systemctl restart xlr-player-tracker.service xlr-discord-bot.service
+sudo bash Plutonium/XLRManager.sh restart all
+```
+
+`xlr-update.sh` re-applies customization, recompiles the GSC, refreshes Bot Warfare and re-applies security. Use `--full-configure` to also regenerate the `dedicated_*.cfg` from templates (destructive).
+
+---
+
+## Directory structure
+
+```
+XLRProject/
+├── .config/
+│   ├── security/setupDdosProtection.sh   # anti-DDoS
+│   └── xlr/                              # XLR install modules
+│       ├── setupCustomization.sh        # GSC deploy + MOTD + tips dvars
+│       ├── setupBotWarfare.sh           # Bot Warfare install + dvars
+│       └── setupSystemd.sh              # systemd units
+├── Plutonium/
+│   ├── XLRManager.sh                    # multi-server manager
+│   └── server_config.json              # main configuration
+├── Resources/
+│   ├── gsc/mp/xlr_welcome.gsc          # in-game script (welcome, tips)
+│   └── xlr/                            # Python: bot, tracker, library
+│       ├── xlr_bot.py / xlr_lib.py     # Discord bot + shared library
+│       ├── player_tracker.py           # DB tracking, reports, ban enforcement
+│       ├── sync_bot_names.py           # bots.txt generator
+│       ├── cogs/                       # Discord command modules
+│       └── assets/xlr_logo.png
+├── install.sh / uninstall.sh
+├── xlr-configure.sh / xlr-update.sh
+```
+
+---
+
+## Troubleshooting
+
+**Server not in the Plutonium list** — use a valid, unique server key per server and confirm the game UDP port is open.
+
+**Discord bot won't start** — check the token in `/etc/xlr/secrets.env` and `discord_config.enabled`, then inspect logs: `journalctl -u xlr-discord-bot.service -n 50`.
+
+**No in-game tips** — ensure the GSC compiled: `cat Plutonium/storage/t6/scripts/mp/xlr_welcome.compile.log`, then restart the game server.
+
+**Bots not spawning on TDM** — verify `bots_manage_fill` in `Server/Multiplayer/main/dedicated_tdm.cfg` and that Bot Warfare scripts exist in `Plutonium/storage/t6/scripts/mp/`.
+
+For Wine display errors: they are harmless and can be ignored.
+
+---
+
+## Credits
+
+- [Plutonium](https://plutonium.pw) — the T6 client and server platform
+- [Sterbweise/T6Server](https://github.com/Sterbweise/T6Server) — the base installer this project forks
+- [ineedbots/t6_bot_warfare](https://github.com/ineedbots/t6_bot_warfare) — filler bots
+- [IW4MAdmin](https://github.com/RaidMax/IW4M-Admin) — optional web admin
+- [plutonium-updater](https://github.com/mxve/plutonium-updater.rs) — server updater
+
+---
+
+## License
+
+Licensed under the **GPL-3.0** License — see [LICENCE](LICENCE).
+
+---
+
+## Support
+
+**Discord:** [discord.gg/63FAj2ZMrN](https://discord.gg/63FAj2ZMrN)
+
+Open an issue on this repository for bugs or feature requests.
+
+<div align="center">
+
+**Play EU. Play protected. Play XLR.**
+
+</div>
