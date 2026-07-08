@@ -105,10 +105,11 @@ class XLRServers(commands.Cog):
             await ctx.send(embed=embed)
             return
         embed = xlr_embed(self.bot, title="Game Tip Sent", color=XLR_SUCCESS)
+        embed.description = "A random tip was pushed in-game (GSC chat, same as welcome messages)."
         for item in sent:
             embed.add_field(
                 name=item["server_id"].upper(),
-                value=f"**{item['players']}** player(s)\n{item['message']}",
+                value=f"RCON status: **{item['players']}** player(s) parsed",
                 inline=False,
             )
         await ctx.send(embed=embed)

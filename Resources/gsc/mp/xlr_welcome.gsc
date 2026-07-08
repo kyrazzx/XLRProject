@@ -4,7 +4,7 @@
 init()
 {
     level thread onPlayerConnect();
-    level thread xlrPlayerTips();
+    level thread xlrForceTipWatch();
     xlr_log( "init OK welcome" );
 }
 
@@ -60,6 +60,7 @@ onPlayerConnect()
         xlr_log( "connecting: " + player.name );
         player thread onPlayerSpawned();
         player thread xlr_owner_disconnect_watch();
+        player thread xlrPlayerTipLoop();
     }
 }
 
@@ -83,17 +84,40 @@ xlrTipInterval()
 {
     interval = getDvarInt( "xlr_tip_interval" );
     if ( interval < 60 )
-        interval = 300;
+        interval = 240;
     return interval;
 }
 
-xlrPlayerTips()
+xlrPlayerTipLoop()
 {
-    level endon( "game_ended" );
-    level.xlrTipCursor = 0;
+    self endon( "disconnect" );
+    if ( !isDefined( self.xlrTipIndex ) )
+        self.xlrTipIndex = 0;
     for ( ;; )
     {
         wait xlrTipInterval();
+        self thread xlrSendPlayerTip( self.xlrTipIndex );
+        self.xlrTipIndex++;
+        if ( self.xlrTipIndex >= 6 )
+            self.xlrTipIndex = 0;
+    }
+}
+
+xlrForceTipWatch()
+{
+    level endon( "game_ended" );
+    level.xlrLastForceTip = 0;
+    level.xlrTipCursor = 0;
+    for ( ;; )
+    {
+        wait 2;
+        token = getDvarInt( "xlr_force_tip" );
+        if ( token == level.xlrLastForceTip )
+            continue;
+        level.xlrLastForceTip = token;
+        if ( token <= 0 )
+            continue;
+        xlr_log( "force tip token " + token );
         tipIndex = level.xlrTipCursor;
         foreach ( player in level.players )
         {
@@ -105,7 +129,6 @@ xlrPlayerTips()
                 tipIndex = 0;
         }
         level.xlrTipCursor = tipIndex;
-        xlr_log( "player tips sent" );
     }
 }
 
@@ -121,7 +144,7 @@ xlrSendPlayerTip( tipIndex )
             self iprintln( "^6[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN" );
             break;
         case 2:
-            self iprintln( "^6[XLR]^7 Respect other players — enjoy the match!" );
+            self iprintln( "^6[XLR]^7 Respect other players - enjoy the match!" );
             break;
         case 3:
             self iprintln( "^6[XLR]^7 Need help? Open a ticket on our Discord." );

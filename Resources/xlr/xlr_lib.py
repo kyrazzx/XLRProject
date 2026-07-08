@@ -423,38 +423,29 @@ def game_tip_pool(config, conn, server_id):
 def force_random_game_tip(config=None, server_id="all"):
     config = config or load_config()
     target = (server_id or "all").strip().lower()
-    conn = connect_db()
-    init_db(conn)
+    token = int(time.time())
     results = []
-    try:
-        for server in iter_enabled_servers(config):
-            sid = server["id"]
-            if target not in ("all", "", "*") and sid != target:
-                continue
-            if not is_server_running(server["port"]):
-                results.append({"server_id": sid, "sent": False, "reason": "offline"})
-                continue
-            tips = game_tip_pool(config, conn, sid)
-            if not tips:
-                results.append({"server_id": sid, "sent": False, "reason": "no tips configured"})
-                continue
-            message = random.choice(tips)
-            host = server["host"]
-            port = server["port"]
-            password = server["password"]
-            status = rcon_query(host, port, password, "status")
-            players = len(parse_status_clients(status))
-            rcon_say(host, port, password, message)
-            results.append(
-                {
-                    "server_id": sid,
-                    "sent": True,
-                    "message": message,
-                    "players": players,
-                }
-            )
-    finally:
-        conn.close()
+    for server in iter_enabled_servers(config):
+        sid = server["id"]
+        if target not in ("all", "", "*") and sid != target:
+            continue
+        if not is_server_running(server["port"]):
+            results.append({"server_id": sid, "sent": False, "reason": "offline"})
+            continue
+        host = server["host"]
+        port = server["port"]
+        password = server["password"]
+        status = rcon_query(host, port, password, "status")
+        players = len(parse_status_clients(status))
+        rcon_query(host, port, password, f"set xlr_force_tip {token}")
+        results.append(
+            {
+                "server_id": sid,
+                "sent": True,
+                "message": "In-game tip triggered via GSC",
+                "players": players,
+            }
+        )
     return results
 
 
@@ -573,7 +564,7 @@ def sync_server_game_dvars(server, config, conn):
     port = server["port"]
     password = server["password"]
     unique_count = count_unique_players(conn, sid)
-    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
+    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 240))
     rcon_query(host, port, password, f"set xlr_unique_players {unique_count}")
     rcon_query(host, port, password, f"set xlr_tip_interval {tip_interval}")
 

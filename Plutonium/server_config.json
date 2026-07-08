@@ -26,7 +26,7 @@
         "welcome_chat_en": "^6[XLR]^7 Welcome {player}! Discord: {discord} | Report: !report <player> <reason>",
         "motd_en": "^6XLR EU^7 — Fast, DDoS-protected BO2 servers",
         "welcome_mode": "both",
-        "auto_message_interval_seconds": 300,
+        "auto_message_interval_seconds": 240,
         "auto_messages_en": [
             "^6[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN",
             "^6[XLR]^7 Report cheaters in chat: !report <player> <reason>",
