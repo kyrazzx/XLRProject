@@ -45,7 +45,7 @@
     },
     "bot_warfare": {
         "enabled": true,
-        "server_ids": ["tdm"],
+        "server_ids": ["ffa", "tdm"],
         "manage_fill": 12,
         "skill": 3,
         "team_force": 1,

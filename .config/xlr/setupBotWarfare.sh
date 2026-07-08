@@ -83,6 +83,20 @@ xlr_apply_bot_warfare_dvars() {
             fill=12
         fi
 
+        # Free-for-all / individual modes have no teams: disable team forcing.
+        local gametype srv_team_force is_team_mode
+        gametype=$(jq -r --arg sid "$server_id" '.servers[] | select(.id == $sid) | .gametype // ""' "$config_file")
+        case "$gametype" in
+            dm|gun|oic|shrp|infect|hns|""|null)
+                srv_team_force=0
+                is_team_mode=0
+                ;;
+            *)
+                srv_team_force="$team_force"
+                is_team_mode=1
+                ;;
+        esac
+
         for key in bots_main bots_manage_fill bots_manage_fill_kick bots_manage_fill_mode \
             bots_team_force bots_skill bots_main_waitForHostTime bots_team bots_team_mode; do
             sed -i "/^set ${key} /d" "$cfg_path" 2>/dev/null || true
@@ -93,13 +107,17 @@ xlr_apply_bot_warfare_dvars() {
             echo "set bots_manage_fill \"${fill}\""
             echo "set bots_manage_fill_kick 1"
             echo "set bots_manage_fill_mode 0"
-            echo "set bots_team_force \"${team_force}\""
-            echo "set bots_team autoassign"
-            echo "set bots_team_mode 0"
+            echo "set bots_team_force \"${srv_team_force}\""
             echo "set bots_skill \"${skill}\""
             echo "set bots_main_waitForHostTime \"${wait_host}\""
         } >> "$cfg_path"
-        echo "[XLR] Bot Warfare dvars applied to $cfg_file (fill=${fill}, skill=${skill})"
+        if [ "$is_team_mode" = "1" ]; then
+            {
+                echo "set bots_team autoassign"
+                echo "set bots_team_mode 0"
+            } >> "$cfg_path"
+        fi
+        echo "[XLR] Bot Warfare dvars applied to $cfg_file (mode=${gametype:-none}, fill=${fill}, skill=${skill}, team_force=${srv_team_force})"
     done < <(jq -r '.bot_warfare.server_ids[]?' "$config_file")
 }
 
@@ -127,7 +145,9 @@ setupBotWarfare() {
     xlr_deploy_bot_warfare_scripts "$workdir" || return 1
     xlr_apply_bot_warfare_dvars "$workdir" || return 1
     xlr_sync_bot_names "$workdir" || return 1
-    echo "[XLR] Bot Warfare ready for TDM"
+    local ids
+    ids=$(jq -r '.bot_warfare.server_ids | join(", ")' "$config_file" 2>/dev/null)
+    echo "[XLR] Bot Warfare ready for: ${ids:-none}"
 }
 
 if [ "$1" = "--import" ]; then

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -115,17 +116,69 @@ def resolve_target(conn, target):
     return "", target
 
 
-def handle_report_line(conn, server_id, line):
+def _strip_color_codes(text):
+    return re.sub(r"\^.", "", text or "").strip()
+
+
+def parse_report_line(line):
+    """Extract (target, reason, reporter_name, reporter_id) from a chat line.
+
+    T6 game logs write chat as a ';'-delimited "say" line, e.g.
+        12:34 say;<guid>;<clientnum>;<name>;!report <target> <reason>
+    (some variants insert a team field). We read everything before "!report"
+    to recover who sent it. Falls back gracefully if the format differs.
+    """
     match = REPORT_CHAT_RE.search(line)
     if not match:
         return None
-    target_name = match.group(1)
-    reason = (match.group(2) or "No reason provided").strip()
+    target_name = _strip_color_codes(match.group(1))
+    reason = _strip_color_codes(match.group(2) or "No reason provided") or "No reason provided"
+
+    prefix = line[: match.start()]
+    reporter_name = ""
+    reporter_id = ""
+    if ";" in prefix:
+        fields = [f.strip() for f in prefix.split(";")]
+        for field in reversed(fields):
+            if field:
+                reporter_name = _strip_color_codes(field)
+                break
+        for field in fields:
+            token = field.split()[-1] if field.split() else field
+            if token.isdigit() and len(token) >= 5:
+                reporter_id = token
+                break
+    else:
+        colon = re.search(r"say(?:team)?\s*:\s*(?:\d+\s+)?(.+?)\s*:\s*!report", line, re.I)
+        if colon:
+            reporter_name = _strip_color_codes(colon.group(1))
+    return target_name, reason, reporter_name, reporter_id
+
+
+def handle_report_line(conn, server_id, line):
+    parsed = parse_report_line(line)
+    if not parsed:
+        return None
+    target_name, reason, reporter_name, reporter_id = parsed
     target_id, resolved_name = resolve_target(conn, target_name)
+
+    if reporter_id:
+        db_id, db_name = resolve_target(conn, reporter_id)
+        if db_name and not reporter_name:
+            reporter_name = db_name
+    elif reporter_name:
+        db_id, db_name = resolve_target(conn, reporter_name)
+        if db_id:
+            reporter_id = db_id
+        if db_name:
+            reporter_name = db_name
+    if not reporter_name:
+        reporter_name = "in-game"
+
     report_id = create_report(
         conn,
-        "in-game",
-        "",
+        reporter_name,
+        reporter_id,
         resolved_name,
         target_id,
         reason,
