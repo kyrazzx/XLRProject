@@ -117,31 +117,36 @@ def resolve_target(conn, target):
 
 
 def _strip_color_codes(text):
-    return re.sub(r"\^.", "", text or "").strip()
+    text = text or ""
+    text = re.sub(r"\x1b\[[0-9;]*m", "", text)  # ANSI SGR sequences (stdout colors)
+    text = re.sub(r"\^.", "", text)              # CoD caret color codes
+    return text.strip()
 
 
 def parse_report_line(line):
     """Extract (target, reason, reporter_name, reporter_id) from a chat line.
 
-    T6 game logs write chat as a ';'-delimited "say" line, e.g.
+    Plutonium stdout logs chat as (ANSI-colored):
+        <name>: !report <target> <reason>
+    T6 game logs use a ';'-delimited "say" line:
         12:34 say;<guid>;<clientnum>;<name>;!report <target> <reason>
-    (some variants insert a team field). We read everything before "!report"
-    to recover who sent it. Falls back gracefully if the format differs.
+    ANSI codes are stripped first (they contain ';' that would break parsing).
     """
-    match = REPORT_CHAT_RE.search(line)
+    clean = _strip_color_codes(line)
+    match = REPORT_CHAT_RE.search(clean)
     if not match:
         return None
     target_name = _strip_color_codes(match.group(1))
     reason = _strip_color_codes(match.group(2) or "No reason provided") or "No reason provided"
 
-    prefix = line[: match.start()]
+    prefix = clean[: match.start()]
     reporter_name = ""
     reporter_id = ""
     if ";" in prefix:
         fields = [f.strip() for f in prefix.split(";")]
         for field in reversed(fields):
             if field:
-                reporter_name = _strip_color_codes(field)
+                reporter_name = field
                 break
         for field in fields:
             token = field.split()[-1] if field.split() else field
@@ -149,10 +154,21 @@ def parse_report_line(line):
                 reporter_id = token
                 break
     else:
-        colon = re.search(r"say(?:team)?\s*:\s*(?:\d+\s+)?(.+?)\s*:\s*!report", line, re.I)
-        if colon:
-            reporter_name = _strip_color_codes(colon.group(1))
+        colon = re.search(r"([^:]+):\s*$", prefix)
+        reporter_name = (colon.group(1) if colon else prefix.rstrip(": ")).strip()
     return target_name, reason, reporter_name, reporter_id
+
+
+def _resolve_reporter_id(conn, reporter_name):
+    if not reporter_name:
+        return ""
+    rid, _ = resolve_target(conn, reporter_name)
+    if rid:
+        return rid
+    stripped = re.sub(r"^\[[^\]]*\]", "", reporter_name).strip()  # drop leading clan tag
+    if stripped and stripped != reporter_name:
+        rid, _ = resolve_target(conn, stripped)
+    return rid or ""
 
 
 def handle_report_line(conn, server_id, line):
@@ -162,16 +178,8 @@ def handle_report_line(conn, server_id, line):
     target_name, reason, reporter_name, reporter_id = parsed
     target_id, resolved_name = resolve_target(conn, target_name)
 
-    if reporter_id:
-        db_id, db_name = resolve_target(conn, reporter_id)
-        if db_name and not reporter_name:
-            reporter_name = db_name
-    elif reporter_name:
-        db_id, db_name = resolve_target(conn, reporter_name)
-        if db_id:
-            reporter_id = db_id
-        if db_name:
-            reporter_name = db_name
+    if not reporter_id and reporter_name:
+        reporter_id = _resolve_reporter_id(conn, reporter_name)
     if not reporter_name:
         reporter_name = "in-game"
 
