@@ -1,7 +1,15 @@
 #!/bin/bash
 
-if [ "$1" = "--install" ]; then
-    source /opt/T6Server/.config/config.sh
+XLR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+XLR_WORKDIR="$(cd "$XLR_SCRIPT_DIR/../.." && pwd)"
+
+if [ -f "$XLR_WORKDIR/.config/config.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$XLR_WORKDIR/.config/config.sh"
+fi
+
+if [ -z "${WORKDIR:-}" ]; then
+    WORKDIR="$XLR_WORKDIR"
 fi
 
 BOT_WARFARE_REPO="https://github.com/ineedbots/t6_bot_warfare/archive/refs/heads/master.zip"
@@ -109,7 +117,7 @@ xlr_sync_bot_names() {
 }
 
 setupBotWarfare() {
-    local workdir="${WORKDIR}"
+    local workdir="${WORKDIR:-$XLR_WORKDIR}"
     local config_file="$workdir/Plutonium/server_config.json"
 
     [ -f "$config_file" ] || return 1
