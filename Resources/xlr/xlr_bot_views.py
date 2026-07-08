@@ -42,7 +42,7 @@ class TicketPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.success, emoji="📩", custom_id="xlr_create_ticket")
+    @discord.ui.button(label="Create Ticket", style=discord.ButtonStyle.success, custom_id="xlr_create_ticket")
     async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
@@ -76,7 +76,7 @@ class CloseTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="xlr_close_ticket")
+    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="xlr_close_ticket")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("Closing this ticket in 5 seconds...", ephemeral=True)
         await asyncio.sleep(5)

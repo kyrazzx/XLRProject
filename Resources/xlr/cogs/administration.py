@@ -227,18 +227,42 @@ class Administration(commands.Cog):
         )
 
     @commands.command(name="setup-ticket")
-    async def setup_ticket(self, ctx, channel: discord.TextChannel = None):
-        channel = channel or ctx.channel
+    async def setup_ticket(self, ctx):
+        if ctx.message.channel_mentions:
+            channel = ctx.message.channel_mentions[0]
+        else:
+            channel = ctx.channel
+        perms = channel.permissions_for(ctx.guild.me)
+        if not perms.view_channel or not perms.send_messages or not perms.embed_links:
+            await ctx.send(
+                embed=xlr_embed(
+                    self.bot,
+                    description="I need **View Channel**, **Send Messages** and **Embed Links** in that channel.",
+                )
+            )
+            return
         embed = xlr_embed(
             self.bot,
             title="Support Ticket",
             description="Click the button below to create a ticket and our support team will assist you shortly.",
         )
-        view = TicketPanelView()
         try:
-            message = await channel.send(embed=embed, view=view)
-        except discord.HTTPException:
-            await ctx.send(embed=xlr_embed(self.bot, description="I could not send the ticket panel in that channel. Check my permissions."))
+            message = await channel.send(embed=embed, view=TicketPanelView())
+        except discord.Forbidden:
+            await ctx.send(
+                embed=xlr_embed(
+                    self.bot,
+                    description="I could not send the ticket panel there. Check my role permissions in that channel.",
+                )
+            )
+            return
+        except discord.HTTPException as exc:
+            await ctx.send(
+                embed=xlr_embed(
+                    self.bot,
+                    description=f"Could not send the ticket panel: `{exc.text or exc}`",
+                )
+            )
             return
         self.bot.store.set(ctx.guild.id, "ticket_setup", {"channel": str(channel.id), "message": str(message.id)})
         await ctx.send(embed=xlr_embed(self.bot, description=f"Ticket system set up in {channel.mention}."))

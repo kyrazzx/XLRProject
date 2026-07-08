@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import traceback
 
 import discord
 from discord.ext import commands, tasks
@@ -34,6 +36,8 @@ COG_MODULES = [
     "cogs.xlr_servers",
     "cogs.bot_commands",
 ]
+
+logger = logging.getLogger("xlr_bot")
 
 
 async def dynamic_prefix(bot, message):
@@ -75,6 +79,8 @@ class XLRBot(commands.Bot):
         self.reports_loop.start()
 
     async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.CommandInvokeError) and error.original:
+            error = error.original
         if isinstance(error, commands.CheckFailure):
             message = str(error) or "You cannot run this command."
             await ctx.send(embed=xlr_embed(self, description=message))
@@ -87,7 +93,23 @@ class XLRBot(commands.Bot):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(embed=xlr_embed(self, description=f"Missing argument: `{error.param.name}`"))
             return
-        await ctx.send(embed=xlr_embed(self, description="An error occurred while running that command."))
+        if isinstance(error, (commands.BadArgument, commands.ChannelNotFound, commands.RoleNotFound)):
+            await ctx.send(
+                embed=xlr_embed(
+                    self,
+                    description="Invalid argument. For tickets, run `!setup-ticket` inside the target channel or use `!setup-ticket #channel`.",
+                )
+            )
+            return
+        logger.exception("Command failed: %s", getattr(ctx.command, "qualified_name", "unknown"))
+        traceback.print_exception(type(error), error, error.__traceback__)
+        detail = str(error)[:300] if str(error) else "Unknown error"
+        await ctx.send(
+            embed=xlr_embed(
+                self,
+                description=f"An error occurred while running that command.\n`{detail}`",
+            )
+        )
 
     async def on_ready(self):
         if not self._branding_applied:
@@ -152,6 +174,7 @@ class XLRBot(commands.Bot):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     config_path = WORKROOT / "Plutonium" / "server_config.json"
     if not config_path.exists():
         print(f"Missing configuration: {config_path}")

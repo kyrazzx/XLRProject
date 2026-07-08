@@ -1,9 +1,0 @@
-node_modules/
-*.sqlite
-json.sqlite
-*.log
-npm-debug.log*
-.env
-
-# Contains your bot token - keep it private
-config.json
