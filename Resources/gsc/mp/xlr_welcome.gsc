@@ -71,7 +71,7 @@ onPlayerSpawned()
     self.xlrWelcomed = true;
     wait 0.15;
     xlr_log( "spawned: " + self.name );
-    self iprintlnbold( "^6XLR EU^7" );
+    self iprintlnbold( "^6XLR Project - discord.gg/63FAj2ZMrN^7" );
     self iprintln( "^6[XLR]^7 Welcome ^7" + self.name + "^7! Discord: ^6discord.gg/63FAj2ZMrN" );
     self iprintln( "^6[XLR]^7 Report: ^7!report <player> <reason>" );
     if ( xlr_is_owner( self ) )
