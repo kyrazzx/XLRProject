@@ -12,4 +12,6 @@ xlr-build/
 .build/
 .tools/
 compiled/
-Plutonium/storage/t6/scripts/mp/xlr_messages.compile.log
+Plutonium/storage/t6/bots.txt
+Plutonium/storage/t6/scripts/mp/bots.gsc
+Plutonium/storage/t6/scripts/mp/bots_adapter_pt6.gsc

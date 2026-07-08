@@ -43,6 +43,17 @@
             "chat_text_color": "6"
         }
     },
+    "bot_warfare": {
+        "enabled": true,
+        "server_ids": ["tdm"],
+        "manage_fill": 0,
+        "skill": 3,
+        "team_force": 1,
+        "wait_for_host_seconds": 10,
+        "clan_tag": "XLR",
+        "name_pool_size": 200,
+        "exclude_names": ["akan3"]
+    },
     "moderation": {
         "players_db": "Plutonium/storage/xlr/players.db",
         "discord_reports_channel_id": "",

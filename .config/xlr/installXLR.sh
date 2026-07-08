@@ -32,6 +32,8 @@ installXLRStack() {
     installXlrPython 2>/dev/null || true
     setupDdosProtection "$WORKDIR/Plutonium/server_config.json" 2>/dev/null || true
     setupCustomization 2>/dev/null || true
+    source "$WORKDIR/.config/xlr/setupBotWarfare.sh" --import 2>/dev/null || true
+    setupBotWarfare 2>/dev/null || true
 
     setupSystemdServices
 

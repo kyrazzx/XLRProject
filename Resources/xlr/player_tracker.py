@@ -24,6 +24,7 @@ from xlr_lib import (
     resolve_ips_from_conntrack,
     record_server_player,
     send_player_welcome,
+    sync_bots_txt,
     sync_server_game_dvars,
     upsert_player,
     WORKROOT,
@@ -329,8 +330,18 @@ def main():
     init_db(conn)
     state = {}
     offset_state = load_offset_state()
+    last_bot_sync = 0
     while True:
         config = load_config()
+        now = time.time()
+        if now - last_bot_sync >= 300:
+            try:
+                count = sync_bots_txt(conn, config)
+                if count:
+                    print(f"[bot_names] synced {count} bot names")
+            except Exception as exc:
+                print(f"[bot_names] sync failed: {exc}")
+            last_bot_sync = now
         for server in enabled_servers(config):
             try:
                 process_server(conn, config, server, state, offset_state)

@@ -609,6 +609,97 @@ def fetch_platform_stats(config=None):
         conn.close()
 
 
+BOTS_TXT_PATH = WORKROOT / "Plutonium" / "storage" / "t6" / "bots.txt"
+BOT_NAMES_FALLBACK_PATH = Path(__file__).resolve().parent / "data" / "bot_names_fallback.txt"
+
+
+def bot_warfare_enabled(config=None):
+    config = config or load_config()
+    return bool(config.get("bot_warfare", {}).get("enabled", False))
+
+
+def bot_name_exclusions(config):
+    owner = (config.get("customization", {}).get("owner", {}).get("name") or "akan3").strip().lower()
+    extra = config.get("bot_warfare", {}).get("exclude_names") or []
+    exclusions = {owner, "akan3"}
+    for item in extra:
+        if item and str(item).strip():
+            exclusions.add(str(item).strip().lower())
+    return exclusions
+
+
+def sanitize_bot_name(name):
+    name = re.sub(r"[^\w\-\[\]]", "", (name or "").strip())
+    return name[:15]
+
+
+def load_fallback_bot_names(exclusions):
+    names = []
+    if not BOT_NAMES_FALLBACK_PATH.is_file():
+        return names
+    for line in BOT_NAMES_FALLBACK_PATH.read_text(encoding="utf-8").splitlines():
+        name = sanitize_bot_name(line)
+        if not name or name.lower() in exclusions:
+            continue
+        names.append(name)
+    return names
+
+
+def sync_bots_txt(conn=None, config=None):
+    config = config or load_config()
+    if not bot_warfare_enabled(config):
+        return 0
+
+    bw = config.get("bot_warfare", {})
+    tag = sanitize_bot_name(bw.get("clan_tag") or "XLR")[:4] or "XLR"
+    limit = int(bw.get("name_pool_size", 200))
+    exclusions = bot_name_exclusions(config)
+
+    own_conn = conn is None
+    if own_conn:
+        conn = connect_db()
+        init_db(conn)
+
+    names = []
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT name FROM player_names
+            WHERE length(trim(name)) > 0
+            ORDER BY RANDOM()
+            LIMIT ?
+            """,
+            (max(limit * 3, 60),),
+        ).fetchall()
+        for row in rows:
+            name = sanitize_bot_name(row["name"])
+            if not name or name.lower() in exclusions:
+                continue
+            if name in names:
+                continue
+            names.append(name)
+            if len(names) >= limit:
+                break
+    finally:
+        if own_conn:
+            conn.close()
+
+    if len(names) < 20:
+        for name in load_fallback_bot_names(exclusions):
+            if name not in names:
+                names.append(name)
+            if len(names) >= max(20, limit):
+                break
+
+    if not names:
+        names = [f"Player{i}" for i in range(1, 21)]
+
+    lines = [f"{name},{tag}" for name in names]
+    BOTS_TXT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BOTS_TXT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(lines)
+
+
 def welcome_message(config, player_name):
     custom = config.get("customization", {})
     invite = custom.get("discord_invite", "discord.gg/63FAj2ZMrN")

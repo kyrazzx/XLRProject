@@ -15,6 +15,8 @@ applyServerCredentials
 setupSecurityConfig 2>/dev/null || true
 setupDdosProtection "$DEFAULT_DIR/Plutonium/server_config.json" 2>/dev/null || true
 setupCustomization
+source "$DEFAULT_DIR/.config/xlr/setupBotWarfare.sh" --import
+setupBotWarfare
 installXlrPython
 configureIW4MAdmin
 setupSystemdServices

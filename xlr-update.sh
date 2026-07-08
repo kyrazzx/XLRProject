@@ -103,6 +103,8 @@ run_light_post_update() {
     source "$DEFAULT_DIR/.config/config.sh"
     source "$DEFAULT_DIR/.config/xlr/setupCustomization.sh" --import
     setupCustomization || true
+    source "$DEFAULT_DIR/.config/xlr/setupBotWarfare.sh" --import
+    setupBotWarfare || true
     source "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --import
     if [ "$(id -u)" -eq 0 ]; then
         setupDdosProtection "$CONFIG_FILE" || true
