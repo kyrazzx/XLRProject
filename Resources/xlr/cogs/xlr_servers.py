@@ -75,9 +75,8 @@ class XLRServers(commands.Cog):
         embed = xlr_embed(self.bot, title="XLR Server Stats")
         embed.add_field(name="Players Online", value=str(data["total_players"]), inline=True)
         embed.add_field(name="Servers Online", value=f"{data['online_servers']}/{len(data['servers'])}", inline=True)
-        embed.add_field(name="Unique Players (Network)", value=str(data["global_unique_players"]), inline=True)
+        embed.add_field(name="Unique Players", value=str(data["global_unique_players"]), inline=True)
         embed.add_field(name="Active Game Bans", value=str(data["active_bans"]), inline=True)
-        embed.add_field(name="Pending Reports", value=str(data["pending_reports"]), inline=True)
         for item in data["servers"]:
             if item["online"]:
                 status = f"Online · **{item['players']}** playing"
