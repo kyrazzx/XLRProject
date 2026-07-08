@@ -86,7 +86,7 @@ class XLRServers(commands.Cog):
                 emoji = "🔴"
             embed.add_field(
                 name=f"{emoji} {item['name']}",
-                value=f"{status}\nUnique since launch: **{item['unique_players']}**",
+                value=status,
                 inline=False,
             )
         await ctx.send(embed=embed)
