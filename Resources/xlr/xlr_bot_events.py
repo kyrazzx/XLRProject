@@ -1,16 +1,18 @@
 import asyncio
-import re
 import time
 
 import discord
 from discord.ext import commands, tasks
 
 from xlr_bot_core import (
+    GENERAL_LINK_RE,
     XLR_DANGER,
     fetch_executor,
     format_welcome,
     is_enabled,
     is_whitelisted,
+    message_has_discord_invite,
+    message_has_exe_attachment,
     punish_member,
     send_mod_log,
     xlr_embed,
@@ -334,6 +336,26 @@ class SecurityRuntime:
     def __init__(self, bot):
         self.bot = bot
 
+    async def _delete_and_warn(self, message, member, user_notice, log_title, log_description):
+        try:
+            await message.delete()
+        except discord.HTTPException:
+            pass
+        notice = await message.channel.send(
+            embed=xlr_embed(self.bot, description=user_notice)
+        )
+        await asyncio.sleep(4)
+        try:
+            await notice.delete()
+        except discord.HTTPException:
+            pass
+        await send_mod_log(
+            message.guild,
+            self.bot,
+            xlr_log_embed(self.bot, log_title, log_description, color=XLR_DANGER),
+        )
+        return True
+
     async def run_message_security(self, message):
         member = message.author
         if not isinstance(member, discord.Member):
@@ -344,21 +366,35 @@ class SecurityRuntime:
         if exempt:
             return False
 
-        if message.content and await is_enabled(self.bot.store, message.guild.id, "antilink"):
-            if re.search(r"(https?://|discord\.gg/|discord\.com/invite/|www\.)", message.content, re.I):
-                try:
-                    await message.delete()
-                except discord.HTTPException:
-                    pass
-                notice = await message.channel.send(
-                    embed=xlr_embed(self.bot, description=f"{member.mention}, links are not allowed here.")
+        if await is_enabled(self.bot.store, message.guild.id, "antiinvite"):
+            if message_has_discord_invite(message):
+                return await self._delete_and_warn(
+                    message,
+                    member,
+                    f"{member.mention}, Discord invite links are not allowed here.",
+                    "Discord Invite Blocked",
+                    f"**User:** {member}\n**Channel:** {message.channel.mention}",
                 )
-                await asyncio.sleep(4)
-                try:
-                    await notice.delete()
-                except discord.HTTPException:
-                    pass
-                return True
+
+        if await is_enabled(self.bot.store, message.guild.id, "antiexe"):
+            if message_has_exe_attachment(message):
+                return await self._delete_and_warn(
+                    message,
+                    member,
+                    f"{member.mention}, executable (.exe) files are not allowed here.",
+                    "Executable File Blocked",
+                    f"**User:** {member}\n**Channel:** {message.channel.mention}",
+                )
+
+        if message.content and await is_enabled(self.bot.store, message.guild.id, "antilink"):
+            if GENERAL_LINK_RE.search(message.content):
+                return await self._delete_and_warn(
+                    message,
+                    member,
+                    f"{member.mention}, links are not allowed here.",
+                    "Link Blocked",
+                    f"**User:** {member}\n**Channel:** {message.channel.mention}",
+                )
 
         if await is_enabled(self.bot.store, message.guild.id, "antimassmention"):
             count = len(message.mentions) + len(message.role_mentions)

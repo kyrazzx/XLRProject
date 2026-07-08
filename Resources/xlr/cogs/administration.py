@@ -54,6 +54,14 @@ class Administration(commands.Cog):
     async def antilink(self, ctx):
         await self.toggle_setting(ctx, "antilink", "Anti-Link")
 
+    @commands.command(name="antiinvite")
+    async def antiinvite(self, ctx):
+        await self.toggle_setting(ctx, "antiinvite", "Anti-Discord-Invite")
+
+    @commands.command(name="antiexe")
+    async def antiexe(self, ctx):
+        await self.toggle_setting(ctx, "antiexe", "Anti-Executable")
+
     @commands.command(name="antiban")
     async def antiban(self, ctx):
         await self.toggle_setting(ctx, "antiban", "Anti-Ban")
@@ -87,7 +95,6 @@ class Administration(commands.Cog):
         await self.toggle_setting(ctx, "antimassmention", "Anti-Mass Mention")
 
     @commands.command(name="spam")
-    @commands.has_permissions(manage_messages=True)
     async def antispam(self, ctx):
         await self.toggle_setting(ctx, "antispam", "Anti-Spam")
 

@@ -20,6 +20,8 @@ SECURITY_KEYS = [
     "antibot",
     "antichannel",
     "antilink",
+    "antiinvite",
+    "antiexe",
     "antiban",
     "antiguildupdate",
     "anticreateinvite",
@@ -30,6 +32,13 @@ SECURITY_KEYS = [
     "antimassmention",
     "antispam",
 ]
+
+DISCORD_INVITE_RE = re.compile(
+    r"(discord(?:app)?\.(?:com/invite|gg)|discord\.gg)/[a-z0-9-]+",
+    re.I,
+)
+
+GENERAL_LINK_RE = re.compile(r"(https?://|www\.)", re.I)
 
 ACTIVITY_IDS = {
     "poker": 755827207812677713,
@@ -70,6 +79,29 @@ def default_prefix():
 def discord_invite_link():
     config = load_config()
     return config.get("customization", {}).get("discord_invite", "discord.gg/63FAj2ZMrN")
+
+
+def message_has_discord_invite(message):
+    parts = [message.content or ""]
+    for embed in message.embeds:
+        if embed.url:
+            parts.append(embed.url)
+        if embed.description:
+            parts.append(embed.description)
+        if embed.title:
+            parts.append(embed.title)
+    return bool(DISCORD_INVITE_RE.search(" ".join(parts)))
+
+
+def message_has_exe_attachment(message):
+    for attachment in message.attachments:
+        filename = (attachment.filename or "").lower()
+        if filename.endswith(".exe"):
+            return True
+        content_type = (attachment.content_type or "").lower()
+        if content_type == "application/x-msdownload":
+            return True
+    return False
 
 
 def parse_duration(text):
@@ -339,6 +371,8 @@ COMMAND_DESCRIPTIONS = {
     "antibot": "Enable or disable the anti-bot module.",
     "antichannel": "Enable or disable anti-channel create/delete protection.",
     "antilink": "Enable or disable the anti-link module.",
+    "antiinvite": "Auto-delete Discord invite links posted in chat.",
+    "antiexe": "Auto-delete messages that contain .exe file attachments.",
     "antiban": "Enable or disable the anti-ban module.",
     "antiguildupdate": "Enable or disable anti-guild-update protection.",
     "anticreateinvite": "Enable or disable anti-invite creation.",
