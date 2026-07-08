@@ -9,10 +9,10 @@ from xlr_lib import (
     WORKROOT,
     add_ban,
     announce_ban_and_kick,
-    collect_platform_stats,
     collect_server_statuses,
     connect_db,
     create_report,
+    fetch_platform_stats,
     init_db,
     load_config,
     lookup_player,
@@ -71,9 +71,7 @@ class XLRServers(commands.Cog):
 
     @commands.command(name="stats")
     async def stats(self, ctx):
-        conn = connect_db()
-        init_db(conn)
-        data = await asyncio.to_thread(collect_platform_stats, conn, load_config())
+        data = await asyncio.to_thread(fetch_platform_stats)
         embed = xlr_embed(self.bot, title="XLR Server Stats")
         embed.add_field(name="Players Online", value=str(data["total_players"]), inline=True)
         embed.add_field(name="Servers Online", value=f"{data['online_servers']}/{len(data['servers'])}", inline=True)

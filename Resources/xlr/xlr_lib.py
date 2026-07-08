@@ -557,6 +557,16 @@ def collect_platform_stats(conn, config):
     }
 
 
+def fetch_platform_stats(config=None):
+    config = config or load_config()
+    conn = connect_db()
+    init_db(conn)
+    try:
+        return collect_platform_stats(conn, config)
+    finally:
+        conn.close()
+
+
 def welcome_message(config, player_name):
     custom = config.get("customization", {})
     invite = custom.get("discord_invite", "discord.gg/63FAj2ZMrN")
