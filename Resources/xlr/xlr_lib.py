@@ -438,6 +438,7 @@ def force_random_game_tip(config=None, server_id="all"):
         status = rcon_query(host, port, password, "status")
         players = len(parse_status_clients(status))
         rcon_query(host, port, password, f"set xlr_force_tip {token}")
+        rcon_query(host, port, password, f"seta xlr_force_tip {token}")
         results.append(
             {
                 "server_id": sid,
@@ -564,9 +565,11 @@ def sync_server_game_dvars(server, config, conn):
     port = server["port"]
     password = server["password"]
     unique_count = count_unique_players(conn, sid)
-    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 240))
+    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 5))
     rcon_query(host, port, password, f"set xlr_unique_players {unique_count}")
+    rcon_query(host, port, password, f"seta xlr_unique_players {unique_count}")
     rcon_query(host, port, password, f"set xlr_tip_interval {tip_interval}")
+    rcon_query(host, port, password, f"seta xlr_tip_interval {tip_interval}")
 
 
 def collect_platform_stats(conn, config):

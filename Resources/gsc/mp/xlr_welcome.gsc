@@ -4,7 +4,6 @@
 init()
 {
     level thread onPlayerConnect();
-    level thread xlrForceTipWatch();
     xlr_log( "init OK welcome" );
 }
 
@@ -83,52 +82,43 @@ onPlayerSpawned()
 xlrTipInterval()
 {
     interval = getDvarInt( "xlr_tip_interval" );
-    if ( interval < 60 )
-        interval = 240;
+    if ( interval < 5 )
+        interval = 5;
+    if ( interval > 3600 )
+        interval = 3600;
     return interval;
 }
 
 xlrPlayerTipLoop()
 {
     self endon( "disconnect" );
-    if ( !isDefined( self.xlrTipIndex ) )
-        self.xlrTipIndex = 0;
+    self.xlrTipIndex = 0;
+    self.xlrLastForceTip = 0;
+    self.xlrTipTimer = 0;
     for ( ;; )
     {
-        wait xlrTipInterval();
+        wait 1;
+        token = getDvarInt( "xlr_force_tip" );
+        if ( token > 0 && token != self.xlrLastForceTip )
+        {
+            self.xlrLastForceTip = token;
+            xlr_log( "force tip " + self.name + " token " + token );
+            self thread xlrSendPlayerTip( self.xlrTipIndex );
+            self.xlrTipIndex++;
+            if ( self.xlrTipIndex >= 6 )
+                self.xlrTipIndex = 0;
+            self.xlrTipTimer = 0;
+            continue;
+        }
+        self.xlrTipTimer = self.xlrTipTimer + 1;
+        if ( self.xlrTipTimer < xlrTipInterval() )
+            continue;
+        self.xlrTipTimer = 0;
+        xlr_log( "auto tip " + self.name + " index " + self.xlrTipIndex );
         self thread xlrSendPlayerTip( self.xlrTipIndex );
         self.xlrTipIndex++;
         if ( self.xlrTipIndex >= 6 )
             self.xlrTipIndex = 0;
-    }
-}
-
-xlrForceTipWatch()
-{
-    level endon( "game_ended" );
-    level.xlrLastForceTip = 0;
-    level.xlrTipCursor = 0;
-    for ( ;; )
-    {
-        wait 2;
-        token = getDvarInt( "xlr_force_tip" );
-        if ( token == level.xlrLastForceTip )
-            continue;
-        level.xlrLastForceTip = token;
-        if ( token <= 0 )
-            continue;
-        xlr_log( "force tip token " + token );
-        tipIndex = level.xlrTipCursor;
-        foreach ( player in level.players )
-        {
-            if ( !isDefined( player ) || !isPlayer( player ) )
-                continue;
-            player thread xlrSendPlayerTip( tipIndex );
-            tipIndex++;
-            if ( tipIndex >= 6 )
-                tipIndex = 0;
-        }
-        level.xlrTipCursor = tipIndex;
     }
 }
 

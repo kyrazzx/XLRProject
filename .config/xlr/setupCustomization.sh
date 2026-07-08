@@ -83,6 +83,9 @@ setupCustomization() {
     xlr_purge_legacy_gsc "$gsc_dest_dir"
     xlr_deploy_welcome_gsc "$workdir" "$invite" "$owner_name" "$owner_id"
 
+    local tip_interval
+    tip_interval=$(jq -r '.customization.auto_message_interval_seconds // 5' "$config_file")
+
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do
         [ ! -f "$mp_main/$cfg" ] && continue
         [ ! -w "$mp_main/$cfg" ] && continue
@@ -99,6 +102,15 @@ setupCustomization() {
         if ! grep -q '^set g_allowvote' "$mp_main/$cfg" 2>/dev/null; then
             echo "set g_allowvote 1" >> "$mp_main/$cfg"
         fi
+        for dvar in "xlr_force_tip 0" "xlr_unique_players 0" "xlr_tip_interval ${tip_interval}"; do
+            key="${dvar%% *}"
+            value="${dvar#* }"
+            if grep -q "^set ${key} " "$mp_main/$cfg" 2>/dev/null; then
+                sed -i "s|^set ${key} .*|set ${key} \"${value}\"|" "$mp_main/$cfg"
+            else
+                echo "set ${key} \"${value}\"" >> "$mp_main/$cfg"
+            fi
+        done
     done
 
     jq --arg invite "$invite" '
