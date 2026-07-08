@@ -391,7 +391,7 @@ COMMAND_DESCRIPTIONS = {
     "setup-logs": "Set the moderation and security log channel.",
     "setup-autorole": "Set the role automatically given to new members.",
     "scan-members": "Apply the auto-role to all members who are missing it.",
-    "setup-ticket": "Deploy the support ticket panel in a channel.",
+    "setup-ticket": "Deploy the support ticket panel in a channel. Usage: [#channel] or run in the target channel.",
     "status": "Show live status of all XLR BO2 game servers.",
     "players": "Show player counts per game server. Optional: server id.",
     "report": "Submit a player report. Usage: <player> <reason>",

@@ -228,16 +228,18 @@ class Administration(commands.Cog):
 
     @commands.command(name="setup-ticket")
     async def setup_ticket(self, ctx, channel: discord.TextChannel = None):
-        if not channel:
-            await ctx.send(embed=xlr_embed(self.bot, description="Please mention a channel for the ticket panel."))
-            return
+        channel = channel or ctx.channel
         embed = xlr_embed(
             self.bot,
             title="Support Ticket",
             description="Click the button below to create a ticket and our support team will assist you shortly.",
         )
         view = TicketPanelView()
-        message = await channel.send(embed=embed, view=view)
+        try:
+            message = await channel.send(embed=embed, view=view)
+        except discord.HTTPException:
+            await ctx.send(embed=xlr_embed(self.bot, description="I could not send the ticket panel in that channel. Check my permissions."))
+            return
         self.bot.store.set(ctx.guild.id, "ticket_setup", {"channel": str(channel.id), "message": str(message.id)})
         await ctx.send(embed=xlr_embed(self.bot, description=f"Ticket system set up in {channel.mention}."))
 

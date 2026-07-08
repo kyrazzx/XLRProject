@@ -1,8 +1,16 @@
 import asyncio
+import re
 
 import discord
 
 from xlr_bot_core import xlr_embed
+
+
+def safe_ticket_name(user):
+    cleaned = re.sub(r"[^\w-]", "", (user.name or "user").lower())
+    if cleaned:
+        return f"ticket-{cleaned[:20]}"
+    return f"ticket-{user.id}"
 
 
 class CaptchaView(discord.ui.View):
@@ -50,7 +58,7 @@ class TicketPanelView(discord.ui.View):
         if support_role:
             overwrites[support_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
         channel = await guild.create_text_channel(
-            f"ticket-{interaction.user.name}"[:32],
+            safe_ticket_name(interaction.user),
             category=category,
             overwrites=overwrites,
         )

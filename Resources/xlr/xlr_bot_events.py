@@ -307,29 +307,32 @@ class SecurityEvents(commands.Cog):
 
     @commands.Cog.listener()
     async def on_presence_update(self, before, after):
-        guild = after.guild if after else None
-        if not guild or not after or not after.member or after.member.bot:
-            return
-        conf = self.bot.store.get(guild.id, "statusrole")
-        if not conf:
-            return
-        role = guild.get_role(int(conf["role"]))
-        if not role:
-            return
-        custom = discord.utils.get(after.activities, type=discord.ActivityType.custom)
-        keyword = conf.get("keyword", "").lower()
-        has_keyword = bool(custom and custom.state and keyword in custom.state.lower())
-        member = after.member
-        if has_keyword and role not in member.roles:
-            try:
-                await member.add_roles(role, reason="Status keyword matched")
-            except discord.HTTPException:
-                pass
-        elif not has_keyword and role in member.roles:
-            try:
-                await member.remove_roles(role, reason="Status keyword removed")
-            except discord.HTTPException:
-                pass
+        try:
+            member = after if isinstance(after, discord.Member) else getattr(after, "member", None)
+            if not member or not member.guild or member.bot:
+                return
+            guild = member.guild
+            conf = self.bot.store.get(guild.id, "statusrole")
+            if not conf:
+                return
+            role = guild.get_role(int(conf["role"]))
+            if not role:
+                return
+            custom = discord.utils.get(member.activities, type=discord.ActivityType.custom)
+            keyword = conf.get("keyword", "").lower()
+            has_keyword = bool(custom and custom.state and keyword in custom.state.lower())
+            if has_keyword and role not in member.roles:
+                try:
+                    await member.add_roles(role, reason="Status keyword matched")
+                except discord.HTTPException:
+                    pass
+            elif not has_keyword and role in member.roles:
+                try:
+                    await member.remove_roles(role, reason="Status keyword removed")
+                except discord.HTTPException:
+                    pass
+        except Exception:
+            pass
 
 
 class SecurityRuntime:
