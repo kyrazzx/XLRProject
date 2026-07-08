@@ -565,7 +565,7 @@ def sync_server_game_dvars(server, config, conn):
     port = server["port"]
     password = server["password"]
     unique_count = count_unique_players(conn, sid)
-    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 5))
+    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 240))
     rcon_query(host, port, password, f"set xlr_unique_players {unique_count}")
     rcon_query(host, port, password, f"seta xlr_unique_players {unique_count}")
     rcon_query(host, port, password, f"set xlr_tip_interval {tip_interval}")

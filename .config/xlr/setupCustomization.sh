@@ -84,7 +84,7 @@ setupCustomization() {
     xlr_deploy_welcome_gsc "$workdir" "$invite" "$owner_name" "$owner_id"
 
     local tip_interval
-    tip_interval=$(jq -r '.customization.auto_message_interval_seconds // 5' "$config_file")
+    tip_interval=$(jq -r '.customization.auto_message_interval_seconds // 240' "$config_file")
 
     for cfg in dedicated_ffa.cfg dedicated_tdm.cfg dedicated_gungame.cfg dedicated.cfg; do
         [ ! -f "$mp_main/$cfg" ] && continue
