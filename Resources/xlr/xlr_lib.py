@@ -151,6 +151,86 @@ def rcon_query(host, port, password, command):
     return "".join(chunks)
 
 
+def query_server_getstatus(host, port, timeout=1.5):
+    """Query a server the same way the in-game browser does.
+
+    Sends an out-of-band ``getstatus`` UDP packet and parses the
+    ``statusResponse`` (infostring + one line per player: ``score ping "name"``).
+    Bots are reported with a ping of 0, so real players are the ones with a
+    non-zero ping. Returns a dict or ``None`` when the server does not answer.
+    """
+    payload = b"\xff\xff\xff\xffgetstatus\n"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(timeout)
+    try:
+        sock.sendto(payload, (host, int(port)))
+        data, _ = sock.recvfrom(16384)
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+    text = data[4:].decode("latin-1", errors="ignore") if len(data) > 4 else ""
+    marker = "statusResponse"
+    idx = text.find(marker)
+    if idx == -1:
+        return None
+    body = text[idx + len(marker):].lstrip("\r\n")
+    rows = body.split("\n")
+    infostring = rows[0] if rows else ""
+
+    info = {}
+    tokens = infostring.strip().split("\\")
+    if tokens and tokens[0] == "":
+        tokens = tokens[1:]
+    for i in range(0, len(tokens) - 1, 2):
+        info[tokens[i].lower()] = tokens[i + 1]
+
+    total = 0
+    bots = 0
+    real = 0
+    for row in rows[1:]:
+        row = row.strip()
+        if not row:
+            continue
+        parts = row.split(" ", 2)
+        if len(parts) < 2:
+            continue
+        try:
+            ping = int(parts[1])
+        except ValueError:
+            continue
+        total += 1
+        if ping == 0:
+            bots += 1
+        else:
+            real += 1
+
+    if "bots" in info:
+        try:
+            bots = int(info["bots"])
+            real = max(total - bots, 0)
+        except ValueError:
+            pass
+
+    max_clients = 0
+    for key in ("sv_maxclients", "sv_privateclients", "maxclients"):
+        if key in info:
+            try:
+                max_clients = int(info[key])
+                break
+            except ValueError:
+                continue
+
+    return {
+        "total": total,
+        "bots": bots,
+        "real": real,
+        "max_clients": max_clients,
+        "info": info,
+    }
+
+
 SERVER_SHORT_LABELS = {
     "ffa": "FFA",
     "tdm": "TDM",
@@ -196,15 +276,22 @@ def is_server_running(port):
 def is_bot_client(client):
     """Detect Bot Warfare / test-client bots in an RCON status entry.
 
-    Real Plutonium players always expose a non-zero numeric GUID (their
-    Plutonium ID) and a routable IP. Bots are injected in-game with GUID 0
-    and no real address, so we treat those as bots.
+    Official Call of Duty signal: bots use a NA_BOT netadr, so the server's
+    ``status`` prints the literal ``bot`` in the address column and reports a
+    ping of 0. Real players always show a routable ``ip:port`` address and a
+    non-zero ping. We also treat a zero/empty GUID with no IP as a bot.
     """
-    guid = str(client.get("guid") or "").strip()
+    address = str(client.get("address") or "").strip().lower()
+    if address == "bot":
+        return True
     ip = str(client.get("ip") or "").strip()
-    if guid.isdigit() and int(guid) > 0:
+    if ip and ip not in ("0.0.0.0", "127.0.0.1", "loopback"):
         return False
-    if not ip or ip in ("0.0.0.0", "127.0.0.1", "loopback", "bot"):
+    guid = str(client.get("guid") or "").strip()
+    ping = client.get("ping")
+    if guid in ("", "0"):
+        return True
+    if ping == 0:
         return True
     return False
 
@@ -262,10 +349,15 @@ def estimate_players_from_stdout(log_path, port=None, max_bytes=524288):
 
 
 def get_server_player_count(host, port, password, stdout_log=None, max_clients=18):
+    info = query_server_getstatus(host, port)
+    if info is not None and info["total"] > 0:
+        return min(info["real"], max_clients)
     status = rcon_query(host, port, password, "status")
     clients = parse_status_clients(status)
     if clients:
         return min(len(real_clients_only(clients)), max_clients)
+    if info is not None:
+        return 0
     if stdout_log:
         log_count = estimate_players_from_stdout(stdout_log, port=port)
         if log_count > 0:
@@ -355,12 +447,22 @@ def parse_status_clients(status_text):
             client_num = int(parts[0])
         except ValueError:
             continue
+        try:
+            ping = int(parts[2])
+        except ValueError:
+            ping = -1
         guid = parts[3].replace("^7", "").replace("'", "").strip()
         name = parts[4].replace("^7", "").replace("'", "").strip()
         ip = ""
+        address = ""
         for part in reversed(parts[5:]):
-            if ":" in part:
-                ip = part.split(":")[0].strip()
+            token = part.strip()
+            if token.lower() == "bot":
+                address = "bot"
+                break
+            if ":" in token:
+                address = token
+                ip = token.split(":")[0].strip()
                 break
         clients.append(
             {
@@ -368,6 +470,8 @@ def parse_status_clients(status_text):
                 "guid": guid,
                 "name": name,
                 "ip": ip,
+                "ping": ping,
+                "address": address,
             }
         )
     return clients
@@ -468,7 +572,7 @@ def force_random_game_tip(config=None, server_id="all"):
         port = server["port"]
         password = server["password"]
         status = rcon_query(host, port, password, "status")
-        players = len(parse_status_clients(status))
+        players = len(real_clients_only(parse_status_clients(status)))
         rcon_query(host, port, password, f"set xlr_force_tip {token}")
         rcon_query(host, port, password, f"seta xlr_force_tip {token}")
         results.append(
