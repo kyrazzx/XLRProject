@@ -399,6 +399,7 @@ COMMAND_DESCRIPTIONS = {
     "report": "Submit a player report. Usage: <player> <reason>",
     "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP. Bot owner only.",
     "gameban": "Ban a player from XLR BO2 servers. Usage: <player|id|ip> <reason>",
+    "gamekick": "Kick an online player from their BO2 server. Usage: <player|id|ip> [reason]",
     "gameunban": "Remove a player ban from XLR BO2 servers.",
     "restart": "Restart game servers. Usage: [ffa|tdm|all]",
     "backup": "Run an XLR server backup immediately.",

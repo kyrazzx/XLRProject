@@ -9,6 +9,7 @@ from xlr_lib import (
     WORKROOT,
     add_ban,
     announce_ban_and_kick,
+    announce_kick,
     collect_server_statuses,
     connect_db,
     create_report,
@@ -198,6 +199,40 @@ class XLRServers(commands.Cog):
         embed.add_field(name="Reason", value=reason, inline=False)
         if kicked:
             embed.add_field(name="In-game", value="Player was online and announced on their server.", inline=False)
+        await ctx.send(embed=embed)
+
+    @commands.command(name="gamekick", aliases=["bo2kick"])
+    @commands.has_permissions(administrator=True)
+    async def gamekick(self, ctx, target: str, *, reason: str = "Kicked by staff"):
+        conn = connect_db()
+        init_db(conn)
+        rows = lookup_player(conn, target)
+        ip = target if target.replace(".", "").isdigit() and "." in target else None
+        plutonium_id = rows[0]["plutonium_id"] if rows else (target if target.isdigit() else None)
+        if rows and rows[0]["ips"]:
+            ip = rows[0]["ips"].split(",")[0]
+        player_name = rows[0]["current_name"] if rows else target
+        config = load_config()
+        kicked, name = await asyncio.to_thread(
+            announce_kick,
+            config,
+            plutonium_id=plutonium_id,
+            ip=ip,
+            player_name=player_name,
+            reason=reason,
+        )
+        if kicked:
+            embed = xlr_embed(self.bot, title="Player Kicked", color=XLR_SUCCESS)
+            embed.add_field(name="Target", value=name or target, inline=True)
+            embed.add_field(name="Reason", value=reason, inline=False)
+            embed.add_field(name="In-game", value="Player was online and kicked from their server.", inline=False)
+        else:
+            embed = xlr_embed(
+                self.bot,
+                title="Player Not Found",
+                description=f"`{target}` is not currently online on any XLR server.",
+                color=XLR_DANGER,
+            )
         await ctx.send(embed=embed)
 
     @commands.command(name="gameunban", aliases=["bo2deban", "gamedeban"])

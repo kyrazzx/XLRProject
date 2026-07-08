@@ -517,6 +517,30 @@ def announce_ban_and_kick(config, plutonium_id=None, ip=None, player_name=None, 
     return True
 
 
+def kick_announce_message(player_name, reason=""):
+    name = player_name or "A player"
+    reason = (reason or "").strip()
+    if reason:
+        return f"^1[XLR]^7 {name} ^7was kicked. Reason: ^1{reason}"
+    return f"^1[XLR]^7 {name} ^7was kicked."
+
+
+def announce_kick(config, plutonium_id=None, ip=None, player_name=None, reason=""):
+    """Kick an online player from whichever server they are on (no ban)."""
+    server, client = find_online_client(config, plutonium_id=plutonium_id, ip=ip)
+    if not server or not client:
+        return False, None
+    name = client.get("name") or player_name or "A player"
+    message = kick_announce_message(name, reason)
+    host = server["host"]
+    port = server["port"]
+    password = server["password"]
+    rcon_say(host, port, password, message)
+    kick_reason = reason.strip() if (reason or "").strip() else "kicked by staff"
+    rcon_query(host, port, password, f"clientkick {client['client_num']} {kick_reason}")
+    return True, name
+
+
 def send_player_tips(config, server, clients, state):
     sid = server["id"]
     interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
