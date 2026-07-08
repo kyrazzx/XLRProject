@@ -22,8 +22,9 @@ from xlr_lib import (
     rcon_query,
     rcon_say,
     resolve_ips_from_conntrack,
-    send_player_tips,
+    record_server_player,
     send_player_welcome,
+    sync_server_game_dvars,
     upsert_player,
     WORKROOT,
 )
@@ -137,8 +138,9 @@ def player_key(client):
     return f"{client['client_num']}:{client['name']}"
 
 
-def maybe_send_auto_message(config, server, state, clients):
-    send_player_tips(config, server, clients, state)
+def maybe_record_server_player(conn, server_id, plutonium_id):
+    if plutonium_id and str(plutonium_id).isdigit():
+        record_server_player(conn, server_id, str(plutonium_id))
 
 
 def kick_banned_player(server, client, session, reason=""):
@@ -203,6 +205,7 @@ def upsert_session_player(conn, session, server, entry, allow_conntrack=True):
         ip,
         entry.get("steam_id"),
     )
+    maybe_record_server_player(conn, server["id"], plutonium_id)
     upsert_key = f"{plutonium_id}:{name}"
     if upsert_key not in session.get("logged", set()):
         session.setdefault("logged", set()).add(upsert_key)
@@ -289,7 +292,6 @@ def process_server(conn, config, server, state, offset_state):
                 print(f"[report] new in-game report on {sid}")
 
     status = rcon_query(server["host"], server["port"], server["password"], "status")
-    active_clients = []
     for client in parse_status_clients(status):
         name = client["name"]
         ip = client["ip"]
@@ -310,8 +312,8 @@ def process_server(conn, config, server, state, offset_state):
             )
             kick_banned_player(server, client, session, reason=reason)
             continue
-        active_clients.append(client)
         upsert_player(conn, plutonium_id, name, ip)
+        maybe_record_server_player(conn, sid, guid if guid.isdigit() else plutonium_id)
         welcome_key = f"{sid}:{player_key(client)}"
         if welcome_key in session["welcomed"]:
             continue
@@ -319,7 +321,7 @@ def process_server(conn, config, server, state, offset_state):
         send_player_welcome(server, client, config)
         print(f"[welcome] {sid}: {name}")
 
-    maybe_send_auto_message(config, server, state, active_clients)
+    sync_server_game_dvars(server, config, conn)
 
 
 def main():

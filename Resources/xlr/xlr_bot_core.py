@@ -393,6 +393,7 @@ COMMAND_DESCRIPTIONS = {
     "scan-members": "Apply the auto-role to all members who are missing it.",
     "setup-ticket": "Deploy the support ticket panel in a channel. Usage: [#channel] or run in the target channel.",
     "status": "Show live status of all XLR BO2 game servers.",
+    "stats": "Show XLR network stats: online players, unique players, bans and reports.",
     "players": "Show player counts per game server. Optional: server id.",
     "report": "Submit a player report. Usage: <player> <reason>",
     "lookup": "Look up a player by name, Plutonium ID, Steam ID or IP. Bot owner only.",

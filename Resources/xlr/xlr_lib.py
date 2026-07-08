@@ -94,6 +94,12 @@ def init_db(conn):
             banned_at TEXT NOT NULL,
             active INTEGER NOT NULL DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS server_players (
+            server_id TEXT NOT NULL,
+            plutonium_id TEXT NOT NULL,
+            first_seen TEXT NOT NULL,
+            PRIMARY KEY (server_id, plutonium_id)
+        );
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             reporter_name TEXT,
@@ -490,6 +496,65 @@ def send_player_tips(config, server, clients, state):
         rcon_tell(host, port, password, client["client_num"], message)
     state[sid]["tip_index"] = (tip_index + len(clients)) % len(messages)
     state[sid]["last_auto_message"] = now
+
+
+def record_server_player(conn, server_id, plutonium_id):
+    if not server_id or not plutonium_id:
+        return
+    conn.execute(
+        "INSERT OR IGNORE INTO server_players (server_id, plutonium_id, first_seen) VALUES (?, ?, ?)",
+        (server_id, str(plutonium_id), utc_now()),
+    )
+    conn.commit()
+
+
+def count_unique_players(conn, server_id=None):
+    if server_id:
+        row = conn.execute(
+            "SELECT COUNT(*) AS total FROM server_players WHERE server_id = ?",
+            (server_id,),
+        ).fetchone()
+    else:
+        row = conn.execute("SELECT COUNT(*) AS total FROM players").fetchone()
+    return int(row["total"]) if row else 0
+
+
+def sync_server_game_dvars(server, config, conn):
+    sid = server["id"]
+    host = server["host"]
+    port = server["port"]
+    password = server["password"]
+    unique_count = count_unique_players(conn, sid)
+    tip_interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
+    rcon_query(host, port, password, f"set xlr_unique_players {unique_count}")
+    rcon_query(host, port, password, f"set xlr_tip_interval {tip_interval}")
+
+
+def collect_platform_stats(conn, config):
+    statuses, total_players, online_servers = collect_server_statuses(config)
+    global_unique = count_unique_players(conn)
+    active_bans = conn.execute(
+        "SELECT COUNT(*) AS total FROM bans WHERE active = 1",
+    ).fetchone()["total"]
+    pending_reports = conn.execute(
+        "SELECT COUNT(*) AS total FROM reports WHERE status = 'pending'",
+    ).fetchone()["total"]
+    per_server = []
+    for item in statuses:
+        per_server.append(
+            {
+                **item,
+                "unique_players": count_unique_players(conn, item["id"]),
+            }
+        )
+    return {
+        "servers": per_server,
+        "total_players": total_players,
+        "online_servers": online_servers,
+        "global_unique_players": global_unique,
+        "active_bans": int(active_bans),
+        "pending_reports": int(pending_reports),
+    }
 
 
 def welcome_message(config, player_name):

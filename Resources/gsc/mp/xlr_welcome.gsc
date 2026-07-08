@@ -4,6 +4,7 @@
 init()
 {
     level thread onPlayerConnect();
+    level thread xlrPlayerTips();
     xlr_log( "init OK welcome" );
 }
 
@@ -76,4 +77,64 @@ onPlayerSpawned()
     self iprintln( "^6[XLR]^7 Report: ^7!report <player> <reason>" );
     if ( xlr_is_owner( self ) )
         xlr_announce_owner_join( self );
+}
+
+xlrTipInterval()
+{
+    interval = getDvarInt( "xlr_tip_interval" );
+    if ( interval < 60 )
+        interval = 300;
+    return interval;
+}
+
+xlrPlayerTips()
+{
+    level endon( "game_ended" );
+    level.xlrTipCursor = 0;
+    for ( ;; )
+    {
+        wait xlrTipInterval();
+        tipIndex = level.xlrTipCursor;
+        foreach ( player in level.players )
+        {
+            if ( !isDefined( player ) || !isPlayer( player ) )
+                continue;
+            player thread xlrSendPlayerTip( tipIndex );
+            tipIndex++;
+            if ( tipIndex >= 6 )
+                tipIndex = 0;
+        }
+        level.xlrTipCursor = tipIndex;
+        xlr_log( "player tips sent" );
+    }
+}
+
+xlrSendPlayerTip( tipIndex )
+{
+    self endon( "disconnect" );
+    switch ( tipIndex )
+    {
+        case 0:
+            self iprintln( "^6[XLR]^7 Report cheaters: !report <player> <reason>" );
+            break;
+        case 1:
+            self iprintln( "^6[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN" );
+            break;
+        case 2:
+            self iprintln( "^6[XLR]^7 Respect other players — enjoy the match!" );
+            break;
+        case 3:
+            self iprintln( "^6[XLR]^7 Need help? Open a ticket on our Discord." );
+            break;
+        case 4:
+            self iprintln( "^6[XLR]^7 Make BO2 great again! Play fair and have fun!" );
+            break;
+        default:
+            count = getDvarInt( "xlr_unique_players" );
+            if ( count > 0 )
+                self iprintln( "^6[XLR]^7 Unique players since launch: ^6" + count );
+            else
+                self iprintln( "^6[XLR]^7 Thanks for playing on XLR EU!" );
+            break;
+    }
 }
