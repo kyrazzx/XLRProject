@@ -11,16 +11,18 @@ from xlr_lib import (
     LET_PLAYER_RE,
     REPORT_CHAT_RE,
     STEAM_RE,
+    ban_announce_message,
     create_report,
+    get_active_ban_reason,
     init_db,
     is_banned,
     load_config,
     connect_db,
     parse_status_clients,
-    pick_auto_message,
     rcon_query,
     rcon_say,
     resolve_ips_from_conntrack,
+    send_player_tips,
     send_player_welcome,
     upsert_player,
     WORKROOT,
@@ -135,18 +137,28 @@ def player_key(client):
     return f"{client['client_num']}:{client['name']}"
 
 
-def maybe_send_auto_message(config, server, state):
-    sid = server["id"]
-    interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
-    now = time.time()
-    last = state.setdefault(sid, {}).get("last_auto_message", 0)
-    if now - last < interval:
+def maybe_send_auto_message(config, server, state, clients):
+    send_player_tips(config, server, clients, state)
+
+
+def kick_banned_player(server, client, session, reason=""):
+    ban_key = f"{client.get('guid') or ''}:{client.get('ip') or ''}:{client['client_num']}"
+    if ban_key in session.get("announced_bans", set()):
         return
-    message = pick_auto_message(config)
-    if not message:
-        return
-    rcon_say(server["host"], server["port"], server["password"], message)
-    state[sid]["last_auto_message"] = now
+    name = client.get("name") or "A player"
+    rcon_say(
+        server["host"],
+        server["port"],
+        server["password"],
+        ban_announce_message(name, reason),
+    )
+    rcon_query(
+        server["host"],
+        server["port"],
+        server["password"],
+        f"clientkick {client['client_num']} banned",
+    )
+    session.setdefault("announced_bans", set()).add(ban_key)
 
 
 def take_pending_ip(session):
@@ -277,6 +289,7 @@ def process_server(conn, config, server, state, offset_state):
                 print(f"[report] new in-game report on {sid}")
 
     status = rcon_query(server["host"], server["port"], server["password"], "status")
+    active_clients = []
     for client in parse_status_clients(status):
         name = client["name"]
         ip = client["ip"]
@@ -290,13 +303,14 @@ def process_server(conn, config, server, state, offset_state):
             if ip:
                 entry["ip"] = ip
         if is_banned(conn, plutonium_id=plutonium_id if guid.isdigit() else None, ip=ip):
-            rcon_query(
-                server["host"],
-                server["port"],
-                server["password"],
-                f"clientkick {client['client_num']} banned",
+            reason = get_active_ban_reason(
+                conn,
+                plutonium_id=plutonium_id if guid.isdigit() else None,
+                ip=ip,
             )
+            kick_banned_player(server, client, session, reason=reason)
             continue
+        active_clients.append(client)
         upsert_player(conn, plutonium_id, name, ip)
         welcome_key = f"{sid}:{player_key(client)}"
         if welcome_key in session["welcomed"]:
@@ -305,7 +319,7 @@ def process_server(conn, config, server, state, offset_state):
         send_player_welcome(server, client, config)
         print(f"[welcome] {sid}: {name}")
 
-    maybe_send_auto_message(config, server, state)
+    maybe_send_auto_message(config, server, state, active_clients)
 
 
 def main():

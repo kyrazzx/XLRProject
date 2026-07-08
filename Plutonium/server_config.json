@@ -29,7 +29,10 @@
         "auto_message_interval_seconds": 300,
         "auto_messages_en": [
             "^6[XLR]^7 Join our Discord: discord.gg/63FAj2ZMrN",
-            "^6[XLR]^7 Report cheaters in chat: !report <player> <reason>"
+            "^6[XLR]^7 Report cheaters in chat: !report <player> <reason>",
+            "^6[XLR]^7 Respect other players — enjoy the match!",
+            "^6[XLR]^7 Need help? Open a ticket on our Discord.",
+            "^6[XLR]^7 Make BO2 great again! Play fair and have fun!"
         ],
         "owner": {
             "enabled": true,

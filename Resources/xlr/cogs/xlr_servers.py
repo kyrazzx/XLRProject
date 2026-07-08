@@ -8,6 +8,7 @@ from xlr_bot_core import CATEGORY_BO2, XLR_DANGER, XLR_SUCCESS, bot_owner_only, 
 from xlr_lib import (
     WORKROOT,
     add_ban,
+    announce_ban_and_kick,
     collect_server_statuses,
     connect_db,
     create_report,
@@ -136,9 +137,21 @@ class XLRServers(commands.Cog):
         if rows and rows[0]["ips"]:
             ip = rows[0]["ips"].split(",")[0]
         add_ban(conn, ip=ip, plutonium_id=plutonium_id, reason=reason, banned_by=str(ctx.author))
+        player_name = rows[0]["current_name"] if rows else target
+        config = load_config()
+        kicked = await asyncio.to_thread(
+            announce_ban_and_kick,
+            config,
+            plutonium_id=plutonium_id,
+            ip=ip,
+            player_name=player_name,
+            reason=reason,
+        )
         embed = xlr_embed(self.bot, title="Game Ban Applied", color=XLR_DANGER)
         embed.add_field(name="Target", value=target, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
+        if kicked:
+            embed.add_field(name="In-game", value="Player was online and announced on their server.", inline=False)
         await ctx.send(embed=embed)
 
     @commands.command(name="gameunban", aliases=["bo2deban", "gamedeban"])

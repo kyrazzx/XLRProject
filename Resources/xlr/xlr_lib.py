@@ -404,6 +404,94 @@ def pick_auto_message(config):
     return random.choice(messages)
 
 
+def iter_enabled_servers(config):
+    general = config.get("general_config", {})
+    host = general.get("rcon_ip", "127.0.0.1")
+    for server in config.get("servers", []):
+        if not server.get("enabled", True):
+            continue
+        yield {
+            "id": server.get("id"),
+            "port": server.get("port"),
+            "password": server.get("rcon_password") or server.get("key", ""),
+            "host": host,
+        }
+
+
+def get_active_ban_reason(conn, plutonium_id=None, ip=None):
+    if ip:
+        row = conn.execute(
+            "SELECT reason FROM bans WHERE active = 1 AND ip = ? ORDER BY banned_at DESC LIMIT 1",
+            (ip,),
+        ).fetchone()
+        if row and row["reason"]:
+            return row["reason"]
+    if plutonium_id:
+        row = conn.execute(
+            "SELECT reason FROM bans WHERE active = 1 AND plutonium_id = ? ORDER BY banned_at DESC LIMIT 1",
+            (plutonium_id,),
+        ).fetchone()
+        if row and row["reason"]:
+            return row["reason"]
+    return ""
+
+
+def ban_announce_message(player_name, reason=""):
+    name = player_name or "A player"
+    reason = (reason or "").strip()
+    if reason:
+        return f"^1[XLR]^7 {name} ^7was banned. Reason: ^1{reason}"
+    return f"^1[XLR]^7 {name} ^7was banned."
+
+
+def find_online_client(config, plutonium_id=None, ip=None):
+    for server in iter_enabled_servers(config):
+        status = rcon_query(server["host"], server["port"], server["password"], "status")
+        for client in parse_status_clients(status):
+            client_ip = client.get("ip") or ""
+            client_guid = client.get("guid") or ""
+            if ip and client_ip == ip:
+                return server, client
+            if plutonium_id and client_guid == str(plutonium_id):
+                return server, client
+    return None, None
+
+
+def announce_ban_and_kick(config, plutonium_id=None, ip=None, player_name=None, reason=""):
+    server, client = find_online_client(config, plutonium_id=plutonium_id, ip=ip)
+    if not server or not client:
+        return False
+    name = client.get("name") or player_name or "A player"
+    message = ban_announce_message(name, reason)
+    host = server["host"]
+    port = server["port"]
+    password = server["password"]
+    rcon_say(host, port, password, message)
+    rcon_query(host, port, password, f"clientkick {client['client_num']} banned")
+    return True
+
+
+def send_player_tips(config, server, clients, state):
+    sid = server["id"]
+    interval = int(config.get("customization", {}).get("auto_message_interval_seconds", 300))
+    now = time.time()
+    last = state.setdefault(sid, {}).get("last_auto_message", 0)
+    if now - last < interval:
+        return
+    messages = config.get("customization", {}).get("auto_messages_en") or []
+    if not messages or not clients:
+        return
+    tip_index = state[sid].get("tip_index", 0)
+    host = server["host"]
+    port = server["port"]
+    password = server["password"]
+    for offset, client in enumerate(clients):
+        message = messages[(tip_index + offset) % len(messages)]
+        rcon_tell(host, port, password, client["client_num"], message)
+    state[sid]["tip_index"] = (tip_index + len(clients)) % len(messages)
+    state[sid]["last_auto_message"] = now
+
+
 def welcome_message(config, player_name):
     custom = config.get("customization", {})
     invite = custom.get("discord_invite", "discord.gg/63FAj2ZMrN")

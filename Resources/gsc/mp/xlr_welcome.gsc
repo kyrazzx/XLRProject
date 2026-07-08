@@ -4,7 +4,6 @@
 init()
 {
     level thread onPlayerConnect();
-    level thread xlrAutoMessages();
     xlr_log( "init OK welcome" );
 }
 
@@ -77,16 +76,4 @@ onPlayerSpawned()
     self iprintln( "^6[XLR]^7 Report: ^7!report <player> <reason>" );
     if ( xlr_is_owner( self ) )
         xlr_announce_owner_join( self );
-}
-
-xlrAutoMessages()
-{
-    level endon( "game_ended" );
-    for ( ;; )
-    {
-        wait 300;
-        iprintlnbold( "^6[XLR]^7 discord.gg/63FAj2ZMrN" );
-        iprintln( "^6[XLR]^7 Report cheaters: !report <player> <reason>" );
-        xlr_log( "auto message broadcast" );
-    }
 }
