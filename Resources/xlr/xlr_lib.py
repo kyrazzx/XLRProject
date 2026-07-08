@@ -116,7 +116,19 @@ def init_db(conn):
         );
         """
     )
+    purge_bot_records(conn)
     conn.commit()
+
+
+def purge_bot_records(conn):
+    """Remove bogus rows created by bots before bot filtering existed.
+
+    Bots were recorded with GUID '0' or a non-numeric fallback key
+    (e.g. "3:[XLR]Name"). Real Plutonium IDs are always positive integers.
+    """
+    predicate = "plutonium_id IN ('0', '') OR plutonium_id LIKE '%:%'"
+    for table in ("players", "server_players", "player_ips", "player_names"):
+        conn.execute(f"DELETE FROM {table} WHERE {predicate}")
 
 
 def rcon_query(host, port, password, command):
@@ -181,8 +193,28 @@ def is_server_running(port):
     return False
 
 
+def is_bot_client(client):
+    """Detect Bot Warfare / test-client bots in an RCON status entry.
+
+    Real Plutonium players always expose a non-zero numeric GUID (their
+    Plutonium ID) and a routable IP. Bots are injected in-game with GUID 0
+    and no real address, so we treat those as bots.
+    """
+    guid = str(client.get("guid") or "").strip()
+    ip = str(client.get("ip") or "").strip()
+    if guid.isdigit() and int(guid) > 0:
+        return False
+    if not ip or ip in ("0.0.0.0", "127.0.0.1", "loopback", "bot"):
+        return True
+    return False
+
+
+def real_clients_only(clients):
+    return [client for client in clients if not is_bot_client(client)]
+
+
 def parse_status_player_count(status_text):
-    clients = parse_status_clients(status_text)
+    clients = real_clients_only(parse_status_clients(status_text))
     if clients:
         return len(clients)
     if not status_text:
@@ -233,7 +265,7 @@ def get_server_player_count(host, port, password, stdout_log=None, max_clients=1
     status = rcon_query(host, port, password, "status")
     clients = parse_status_clients(status)
     if clients:
-        return min(len(clients), max_clients)
+        return min(len(real_clients_only(clients)), max_clients)
     if stdout_log:
         log_count = estimate_players_from_stdout(stdout_log, port=port)
         if log_count > 0:

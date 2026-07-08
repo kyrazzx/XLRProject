@@ -16,6 +16,7 @@ from xlr_lib import (
     get_active_ban_reason,
     init_db,
     is_banned,
+    is_bot_client,
     load_config,
     connect_db,
     parse_status_clients,
@@ -294,6 +295,8 @@ def process_server(conn, config, server, state, offset_state):
 
     status = rcon_query(server["host"], server["port"], server["password"], "status")
     for client in parse_status_clients(status):
+        if is_bot_client(client):
+            continue
         name = client["name"]
         ip = client["ip"]
         guid = client.get("guid") or ""
