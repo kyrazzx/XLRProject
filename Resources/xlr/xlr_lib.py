@@ -349,15 +349,10 @@ def estimate_players_from_stdout(log_path, port=None, max_bytes=524288):
 
 
 def get_server_player_count(host, port, password, stdout_log=None, max_clients=18):
-    info = query_server_getstatus(host, port)
-    if info is not None and info["total"] > 0:
-        return min(info["real"], max_clients)
     status = rcon_query(host, port, password, "status")
     clients = parse_status_clients(status)
-    if clients:
+    if status.strip():
         return min(len(real_clients_only(clients)), max_clients)
-    if info is not None:
-        return 0
     if stdout_log:
         log_count = estimate_players_from_stdout(stdout_log, port=port)
         if log_count > 0:
