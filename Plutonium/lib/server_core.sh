@@ -270,7 +270,7 @@ xlr_launch_server_process() {
     local config_file="$1"
     local server_config="$2"
 
-    local install_dir game_path game_mode server_key server_port config_file_name mod server_name server_id
+    local install_dir game_path game_mode server_key server_port server_rcon config_file_name mod server_name server_id
     local log_dir stdout_log additional_params gamesetting bootstrapper wine_home
 
     install_dir=$(xlr_get_install_dir "$config_file")
@@ -282,6 +282,7 @@ xlr_launch_server_process() {
     game_mode=$(echo "$server_config" | jq -r '.mode')
     server_key=$(echo "$server_config" | jq -r '.key')
     server_port=$(echo "$server_config" | jq -r '.port')
+    server_rcon=$(echo "$server_config" | jq -r '.rcon_password // .key // ""')
     config_file_name=$(echo "$server_config" | jq -r '.config')
     mod=$(echo "$server_config" | jq -r '.mods // ""')
     gamesetting=$(echo "$server_config" | jq -r '.gamesetting // ""')
@@ -327,10 +328,12 @@ xlr_launch_server_process() {
             nice -n -10 wine \"$bootstrapper\" \"$game_mode\" \"$game_path\" -dedicated \
                 +set key \"$server_key\" \
                 +set fs_game \"$mod\" \
+                +set net_ip \"0.0.0.0\" \
                 +set net_port \"$server_port\" \
                 +exec \"$config_file_name\" \
                 $gamesetting_param \
                 $additional_params \
+                +set rcon_password \"$server_rcon\" \
                 +map_rotate \
                 >> \"$stdout_log\" 2>&1
             echo \"\$(date '+%Y-%m-%d %H:%M:%S') Server $server_id stopped, restarting...\" >> \"$log_dir/manager.log\"

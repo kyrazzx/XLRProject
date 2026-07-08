@@ -17,6 +17,7 @@ from xlr_lib import (
     init_db,
     is_banned,
     is_bot_client,
+    match_plutonium_server,
     load_config,
     connect_db,
     parse_status_clients,
@@ -42,6 +43,7 @@ def enabled_servers(config):
             continue
         yield {
             "id": server.get("id"),
+            "name": server.get("name", server.get("id")),
             "port": server.get("port"),
             "password": server.get("rcon_password") or server.get("key", ""),
             "host": host,
@@ -325,7 +327,34 @@ def process_server(conn, config, server, state, offset_state):
         send_player_welcome(server, client, config)
         print(f"[welcome] {sid}: {name}")
 
+    record_players_from_api(conn, config, server)
+
     sync_server_game_dvars(server, config, conn)
+
+
+def record_players_from_api(conn, config, server):
+    """Record real players using the Plutonium API (works without RCON).
+
+    The API ``players`` list only contains real players (bots are counted
+    separately), so this keeps the player DB and unique-player stats accurate
+    even when RCON is unavailable.
+    """
+    public_ip = config.get("general_config", {}).get("public_ip") or None
+    entry = match_plutonium_server(
+        {"port": server["port"], "name": server.get("name")},
+        public_ip=public_ip,
+    )
+    if not entry:
+        return
+    for player in entry.get("players") or []:
+        pid = str(player.get("id") or "").strip()
+        pname = (player.get("username") or "").strip()
+        if not pid.isdigit() or not pname:
+            continue
+        if is_banned(conn, plutonium_id=pid):
+            continue
+        upsert_player(conn, pid, pname, "")
+        maybe_record_server_player(conn, server["id"], pid)
 
 
 def main():

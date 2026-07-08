@@ -8,6 +8,7 @@ import socket
 import sqlite3
 import subprocess
 import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -231,6 +232,75 @@ def query_server_getstatus(host, port, timeout=1.5):
     }
 
 
+PLUTONIUM_API_URL = "https://plutonium.pw/api/servers"
+_PLUTO_CACHE = {"ts": 0.0, "data": None}
+_PLUTO_CACHE_TTL = 10  # seconds
+
+
+def fetch_plutonium_servers(force=False, timeout=8):
+    """Fetch the official Plutonium server list (cached for 10s).
+
+    This is the same data source the in-game server browser uses. Each entry
+    exposes a ``players`` array of real players ({username, id, ping}) plus a
+    separate ``bots`` count, so bots never inflate the numbers.
+    """
+    now = time.time()
+    if not force and _PLUTO_CACHE["data"] is not None and now - _PLUTO_CACHE["ts"] < _PLUTO_CACHE_TTL:
+        return _PLUTO_CACHE["data"]
+    try:
+        req = urllib.request.Request(
+            PLUTONIUM_API_URL,
+            headers={"User-Agent": "XLR-Bot/1.0 (+https://discord.gg/63FAj2ZMrN)"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        return _PLUTO_CACHE["data"]  # keep last good data on failure
+    if isinstance(data, list):
+        _PLUTO_CACHE["data"] = data
+        _PLUTO_CACHE["ts"] = now
+    return _PLUTO_CACHE["data"]
+
+
+def match_plutonium_server(server, api_data=None, public_ip=None):
+    """Find our server in the Plutonium API list by ip/port/hostname."""
+    if api_data is None:
+        api_data = fetch_plutonium_servers()
+    if not api_data:
+        return None
+    try:
+        port = int(server.get("port"))
+    except (TypeError, ValueError):
+        return None
+    name = (server.get("name") or "").strip()
+    port_fallback = None
+    for entry in api_data:
+        try:
+            if int(entry.get("port")) != port:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if public_ip and entry.get("ip") != public_ip:
+            continue
+        hostname = entry.get("hostname") or ""
+        if name and (hostname.startswith(name) or name in hostname):
+            return entry
+        port_fallback = port_fallback or entry
+    return port_fallback
+
+
+def plutonium_real_player_count(server, api_data=None, public_ip=None):
+    """Return (real_players, bots) from the Plutonium API, or (None, None)."""
+    entry = match_plutonium_server(server, api_data=api_data, public_ip=public_ip)
+    if entry is None:
+        return None, None
+    players = entry.get("players")
+    real = len(players) if isinstance(players, list) else 0
+    bots = entry.get("bots")
+    bots = int(bots) if isinstance(bots, (int, float)) else 0
+    return real, bots
+
+
 SERVER_SHORT_LABELS = {
     "ffa": "FFA",
     "tdm": "TDM",
@@ -366,7 +436,9 @@ def get_server_player_count(host, port, password, stdout_log=None, max_clients=1
 def collect_server_statuses(config):
     general = config.get("general_config", {})
     host = general.get("rcon_ip", "127.0.0.1")
+    public_ip = general.get("public_ip") or None
     servers_root = WORKROOT / "Plutonium" / "servers"
+    api_data = fetch_plutonium_servers()
     statuses = []
     total_players = 0
     online_servers = 0
@@ -378,19 +450,27 @@ def collect_server_statuses(config):
         password = server.get("rcon_password") or server.get("key", "")
         name = server.get("name", sid)
         short = SERVER_SHORT_LABELS.get(sid, sid.upper()[:4])
-        online = is_server_running(port)
-        players = 0
         max_clients = int(server.get("additional_params", {}).get("sv_maxclients", 18))
+
+        api_entry = match_plutonium_server(server, api_data=api_data, public_ip=public_ip)
+        players = 0
+        if api_entry is not None:
+            online = True
+            api_players = api_entry.get("players")
+            players = len(api_players) if isinstance(api_players, list) else 0
+        else:
+            online = is_server_running(port)
+            if online:
+                stdout_log = servers_root / sid / "logs" / "stdout.log"
+                players = get_server_player_count(
+                    host,
+                    port,
+                    password,
+                    stdout_log,
+                    max_clients=max_clients,
+                )
         if online:
             online_servers += 1
-            stdout_log = servers_root / sid / "logs" / "stdout.log"
-            players = get_server_player_count(
-                host,
-                port,
-                password,
-                stdout_log,
-                max_clients=max_clients,
-            )
             total_players += players
         statuses.append(
             {
