@@ -200,7 +200,7 @@ xlr_rotate_logs() {
         local size
         size=$(stat -c%s "$log_dir/manager.log" 2>/dev/null || echo 0)
         if [ "$size" -gt 10485760 ]; then
-            mv "$log_dir/manager.log" "$log_dir/manager.log.$(date +%s)"
+            mv -f "$log_dir/manager.log" "$log_dir/manager.log.$(date +%s)"
         fi
     fi
 }
@@ -382,6 +382,7 @@ xlr_launch_server_process() {
         export WINEPREFIX=\"$wine_home/.wine\"
         export WINEDEBUG=\"-all,+err\"
         export WINEARCH=\"win64\"
+        export WINEDLLOVERRIDES=\"binkw32=n,binkw64=b\"
         export XDG_RUNTIME_DIR=\"/tmp/xlr-runtime-\$\$\"
         mkdir -p \"\$XDG_RUNTIME_DIR\"
         chmod 700 \"\$XDG_RUNTIME_DIR\"

@@ -53,7 +53,7 @@ merge_local_config() {
             end
         ]
     ' "$new_config" "$old_config" > "$tmp_out"
-    mv "$tmp_out" "$new_config"
+    mv -f "$tmp_out" "$new_config"
 }
 
 prepare_git_update() {
@@ -84,7 +84,7 @@ sync_install_paths() {
     .iw4madmin_config.manual_log_path = ($w + "/Plutonium/storage/t6/logs") |
     .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
   ' "$config_file" > "$tmp_out"
-  mv "$tmp_out" "$config_file"
+  mv -f "$tmp_out" "$config_file"
 }
 
 run_light_post_update() {

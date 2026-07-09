@@ -9,9 +9,15 @@ with manual import enabled, or before running:
 Required layout:
 
   Resources/binaries/zone/          (folder with .ff map/asset files)
-  Resources/binaries/binkw32.dll    (single file)
+  Resources/binaries/binkw32.dll    (32-bit PE32 DLL, ~170 KB — NOT binkw64.dll)
 
-These are the same files the torrent step would place automatically.
+These are the same files the Plutonium T6 server torrent would place automatically.
+The DLL must be 32-bit (i386). A 64-bit DLL or a renamed binkw64.dll will fail with:
+  Unable to load import '_BinkWaitStopAsyncThread@4' from module 'binkw32.dll'
+
+Verify after upload:
+  file Resources/binaries/binkw32.dll
+  # Expected: PE32 executable (DLL) (console) Intel 80386
 Do not commit these files to git.
 
 After upload, from the project root:
