@@ -81,6 +81,11 @@ generateServerConfig() {
             "execgts tdm.cfg $map_pool" "games_mp_tdm.log" "$rcon"
         xlr_patch_dedicated_cfg "$mp_main/dedicated_gungame.cfg" "XLR | Gun Game EU" \
             "execgts gun.cfg $map_pool" "games_mp_gungame.log" "$rcon"
+
+        # XLRManager launches from Plutonium/ and runs +exec dedicated_*.cfg there.
+        cp -f "$mp_main/dedicated_ffa.cfg" "$plutonium_dir/dedicated_ffa.cfg"
+        cp -f "$mp_main/dedicated_tdm.cfg" "$plutonium_dir/dedicated_tdm.cfg"
+        cp -f "$mp_main/dedicated_gungame.cfg" "$plutonium_dir/dedicated_gungame.cfg"
     fi
 
     if [ -f "$zm_main/dedicated_zm.cfg" ]; then
@@ -115,7 +120,7 @@ generateServerConfig() {
                     .gamesetting = "zm_standard_transit.cfg" | .log_file = "games_zm.log"
                 else . end
             ))
-        ' "$template_config" > "$template_config.tmp" && mv "$template_config.tmp" "$template_config"
+        ' "$template_config" > "$template_config.tmp" && mv -f "$template_config.tmp" "$template_config"
     fi
 
     chmod +x "$plutonium_dir/XLRManager.sh" 2>/dev/null || true

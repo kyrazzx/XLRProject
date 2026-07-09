@@ -49,7 +49,7 @@ xlr_sync_config_paths() {
         .iw4madmin_config.install_dir = ($w + "/IW4MAdmin") |
         .iw4madmin_config.manual_log_path = ($pd + "/storage/t6/logs") |
         .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
-    ' "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
+    ' "$config_file" > "$config_file.tmp" && mv -f "$config_file.tmp" "$config_file"
 }
 
 xlr_resolve_game_path() {
