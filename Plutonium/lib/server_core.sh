@@ -380,7 +380,7 @@ xlr_launch_server_process() {
 
     nohup $wine_runner bash -c "
         export WINEPREFIX=\"$wine_home/.wine\"
-        export WINEDEBUG=\"-all\"
+        export WINEDEBUG=\"-all,+err\"
         export WINEARCH=\"win64\"
         export XDG_RUNTIME_DIR=\"/tmp/xlr-runtime-\$\$\"
         mkdir -p \"\$XDG_RUNTIME_DIR\"
