@@ -122,7 +122,7 @@ xlr_fetch_resxt_sources() {
         return 1
     fi
 
-    echo "[XLR] Downloading Resxt Plutonium scripts..."
+    echo "[XLR] Downloading Resxt Plutonium scripts..." >&2
     if ! curl -fsSL "$RESXT_REPO_ZIP" -o "$zip_file"; then
         echo "[XLR] ERROR: failed to download Resxt scripts" >&2
         return 1
@@ -131,11 +131,11 @@ xlr_fetch_resxt_sources() {
     unzip -q "$zip_file" -d "$extract_dir"
     local root_dir
     root_dir="$(find "$extract_dir" -maxdepth 1 -type d -name 'Plutonium-T6-Scripts-*' | head -1)"
-    if [ -z "$root_dir" ]; then
+    if [ -z "$root_dir" ] || [ ! -d "$root_dir" ]; then
         echo "[XLR] ERROR: unexpected Resxt archive layout" >&2
         return 1
     fi
-    printf '%s\n' "$root_dir"
+    printf '%s' "$root_dir"
 }
 
 xlr_stage_chat_commands() {
@@ -147,24 +147,29 @@ xlr_stage_chat_commands() {
     local src_dir="$root_dir/chat_commands"
     local owner_id ports_csv
 
+    if [ ! -d "$src_dir" ] || [ ! -f "$src_dir/chat_commands.gsc" ]; then
+        echo "[XLR] ERROR: Resxt chat_commands not found under $root_dir" >&2
+        return 1
+    fi
+
     owner_id=$(jq -r '.customization.owner.plutonium_id // "0"' "$config_file")
     ports_csv=$(xlr_build_server_ports_array "$config_file" "chat_commands")
 
     rm -rf "$t6_root"
     mkdir -p "$stage_dir/mp"
 
-    cp -f "$src_dir/chat_commands.gsc" "$stage_dir/"
+    cp -f "$src_dir/chat_commands.gsc" "$stage_dir/" || return 1
     for file in "$src_dir"/chat_command_*.gsc; do
         [ -f "$file" ] || continue
         case "$(basename "$file")" in
-            *"unlimited_ammo "*) cp -f "$file" "$stage_dir/chat_command_unlimited_ammo.gsc" ;;
-            *) cp -f "$file" "$stage_dir/" ;;
+            *"unlimited_ammo "*) cp -f "$file" "$stage_dir/chat_command_unlimited_ammo.gsc" || return 1 ;;
+            *) cp -f "$file" "$stage_dir/" || return 1 ;;
         esac
     done
-    [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/"
+    [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/" || true
 
-    xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id"
-    printf '%s\n' "$t6_root"
+    xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id" || return 1
+    printf '%s' "$t6_root"
 }
 
 xlr_stage_mapvote() {
@@ -173,11 +178,16 @@ xlr_stage_mapvote() {
     local t6_root="$workdir/.build/resxt/t6-mapvote"
     local stage_dir="$t6_root/scripts"
 
+    if [ ! -f "$root_dir/mapvote/mapvote.gsc" ] || [ ! -f "$root_dir/mapvote/mapvote_mp_extend.gsc" ]; then
+        echo "[XLR] ERROR: Resxt mapvote files not found under $root_dir" >&2
+        return 1
+    fi
+
     rm -rf "$t6_root"
     mkdir -p "$stage_dir/mp"
-    cp -f "$root_dir/mapvote/mapvote.gsc" "$stage_dir/"
-    cp -f "$root_dir/mapvote/mapvote_mp_extend.gsc" "$stage_dir/mp/"
-    printf '%s\n' "$t6_root"
+    cp -f "$root_dir/mapvote/mapvote.gsc" "$stage_dir/" || return 1
+    cp -f "$root_dir/mapvote/mapvote_mp_extend.gsc" "$stage_dir/mp/" || return 1
+    printf '%s' "$t6_root"
 }
 
 xlr_compile_resxt_tree() {
@@ -314,10 +324,10 @@ xlr_apply_mapvote_dvars() {
 
 xlr_deploy_chat_commands() {
     local workdir="$1"
+    local root_dir="$2"
     local config_file="$workdir/Plutonium/server_config.json"
-    local root_dir t6_root dest_dir
+    local t6_root dest_dir
 
-    root_dir="$(xlr_fetch_resxt_sources "$workdir")" || return 1
     t6_root="$(xlr_stage_chat_commands "$workdir" "$config_file" "$root_dir")" || return 1
     dest_dir="$workdir/Plutonium/storage/t6/scripts"
 
@@ -328,10 +338,10 @@ xlr_deploy_chat_commands() {
 
 xlr_deploy_mapvote() {
     local workdir="$1"
+    local root_dir="$2"
     local config_file="$workdir/Plutonium/server_config.json"
-    local root_dir t6_root dest_dir
+    local t6_root dest_dir
 
-    root_dir="$(xlr_fetch_resxt_sources "$workdir")" || return 1
     t6_root="$(xlr_stage_mapvote "$workdir" "$root_dir")" || return 1
     dest_dir="$workdir/Plutonium/storage/t6/scripts"
 
@@ -343,7 +353,7 @@ xlr_deploy_mapvote() {
 setupResxtScripts() {
     local workdir="${WORKDIR:-$XLR_WORKDIR}"
     local config_file="$workdir/Plutonium/server_config.json"
-    local chat map
+    local chat map root_dir=""
 
     [ -f "$config_file" ] || return 1
     chat=$(jq -r '.resxt_scripts.chat_commands.enabled // false' "$config_file")
@@ -354,11 +364,17 @@ setupResxtScripts() {
         return 0
     fi
 
+    root_dir="$(xlr_fetch_resxt_sources "$workdir")" || return 1
+    if [ ! -d "$root_dir" ]; then
+        echo "[XLR] ERROR: invalid Resxt source path: $root_dir" >&2
+        return 1
+    fi
+
     if [ "$chat" = "true" ]; then
-        xlr_deploy_chat_commands "$workdir" || return 1
+        xlr_deploy_chat_commands "$workdir" "$root_dir" || return 1
     fi
     if [ "$map" = "true" ]; then
-        xlr_deploy_mapvote "$workdir" || return 1
+        xlr_deploy_mapvote "$workdir" "$root_dir" || return 1
     fi
     return 0
 }
