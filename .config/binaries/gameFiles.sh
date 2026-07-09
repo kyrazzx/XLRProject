@@ -39,12 +39,17 @@ verifyBinkDll() {
 verifyCriticalZoneFiles() {
     local zone_dir="$1"
     local critical_ff="code_pre_gfx_mp.ff"
-    local ff_path="$zone_dir/$critical_ff"
+    local ff_path="$zone_dir/all/$critical_ff"
     local ff_size
     local en_ipak="$zone_dir/english/en_base.ipak"
 
+    ensureZoneLocaleAliases "$zone_dir"
+
     if [ ! -f "$ff_path" ]; then
-        printf "${COLORS[RED]}Missing:${COLORS[RESET]} %s (required fastfile)\n" "$ff_path"
+        ff_path="$zone_dir/$critical_ff"
+    fi
+    if [ ! -f "$ff_path" ]; then
+        printf "${COLORS[RED]}Missing:${COLORS[RESET]} %s (required fastfile in zone/all/)\n" "$critical_ff"
         return 1
     fi
 
@@ -54,15 +59,17 @@ verifyCriticalZoneFiles() {
         return 1
     fi
 
-    if [ ! -f "$en_ipak" ]; then
-        printf "${COLORS[RED]}Missing:${COLORS[RESET]} %s (upload full zone/ tree from pluto_t6_full_game torrent)\n" "$en_ipak"
+    if [ ! -f "$en_ipak" ] && [ ! -f "$zone_dir/all/base.ipak" ] && [ ! -f "$zone_dir/french/fr_base.ipak" ]; then
+        printf "${COLORS[RED]}Missing:${COLORS[RESET]} base ipak (need zone/all/base.ipak or zone/french/fr_base.ipak)\n"
         return 1
     fi
 
-    ff_size=$(stat -c%s "$en_ipak" 2>/dev/null || echo 0)
-    if [ "$ff_size" -lt 100000 ]; then
-        printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is too small (%s bytes) — ipak looks corrupt.\n" "$en_ipak" "$ff_size"
-        return 1
+    if [ -f "$en_ipak" ]; then
+        ff_size=$(stat -c%s "$en_ipak" 2>/dev/null || echo 0)
+        if [ "$ff_size" -lt 100000 ]; then
+            printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is too small (%s bytes) — ipak looks corrupt.\n" "$en_ipak" "$ff_size"
+            return 1
+        fi
     fi
 
     if command -v file >/dev/null 2>&1; then
@@ -72,14 +79,38 @@ verifyCriticalZoneFiles() {
             printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is not a valid fastfile (%s).\n" "$ff_path" "$file_info"
             return 1
         fi
-        file_info=$(file -b "$en_ipak")
-        if echo "$file_info" | grep -qiE 'ASCII text|HTML|JSON|empty|very short'; then
-            printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is not a valid ipak (%s).\n" "$en_ipak" "$file_info"
-            return 1
+        if [ -f "$en_ipak" ]; then
+            file_info=$(file -b "$en_ipak")
+            if echo "$file_info" | grep -qiE 'ASCII text|HTML|JSON|empty|very short'; then
+                printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is not a valid ipak (%s).\n" "$en_ipak" "$file_info"
+                return 1
+            fi
         fi
     fi
 
     return 0
+}
+
+ensureZoneLocaleAliases() {
+    local zone_dir="$1"
+    local english="$zone_dir/english"
+    local all="$zone_dir/all"
+    local french="$zone_dir/french"
+
+    mkdir -p "$english"
+
+    xlr_zone_link() {
+        local dest="$1" src="$2"
+        [ -e "$dest" ] && return 0
+        [ -f "$src" ] || return 0
+        ln -sfn "$(cd "$(dirname "$src")" && pwd)/$(basename "$src")" "$dest"
+    }
+
+    if [ -f "$all/base.ipak" ]; then
+        xlr_zone_link "$english/en_base.ipak" "$all/base.ipak"
+    elif [ -f "$french/fr_base.ipak" ]; then
+        xlr_zone_link "$english/en_base.ipak" "$french/fr_base.ipak"
+    fi
 }
 
 verifyManualGameFiles() {
@@ -145,7 +176,30 @@ linkGameBinaries() {
         chmod 644 "$WORKDIR/Server/$dir/binkw32.dll"
         ln -sfn "$binaries_dir/zone" "$WORKDIR/Server/$dir/zone"
     done
+    ensureZoneLocaleAliases "$binaries_dir/zone"
     return 0
+}
+
+downloadGameTorrent() {
+    local torrent_path="$WORKDIR/Resources/sources/pluto_t6_full_game.torrent"
+    if [ -f "$torrent_path" ]; then
+        return 0
+    fi
+    mkdir -p "$WORKDIR/Resources/sources"
+    checkAndInstallCommand "wget" "wget"
+    local urls=(
+        "https://github.com/Sterbweise/T6Server/raw/main/Resources/sources/pluto_t6_full_game.torrent"
+        "https://github.com/Sterbweise/T6Server/raw/master/Resources/sources/pluto_t6_full_game.torrent"
+        "https://raw.githubusercontent.com/Sterbweise/T6Server/main/Resources/sources/pluto_t6_full_game.torrent"
+    )
+    local url
+    for url in "${urls[@]}"; do
+        if wget -q --method=HEAD "$url" 2>/dev/null || curl -fsI "$url" >/dev/null 2>&1; then
+            wget -q -O "$torrent_path" "$url" && return 0
+        fi
+    done
+    printf "${COLORS[RED]}Error:${COLORS[RESET]} Game torrent not found — use manual files: sudo ./import-game-files.sh\n"
+    return 1
 }
 
 downloadGameFilesTorrent() {
@@ -176,7 +230,7 @@ downloadGameFilesTorrent() {
 
     if [ ! -d "/tmp/pluto_t6_full_game/zone" ] || [ ! -f "/tmp/pluto_t6_full_game/binkw32.dll" ]; then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} Torrent download incomplete.\n"
-        printf "Use manual upload or run: sudo ./cleanup-download.sh\n"
+        printf "Use manual upload: sudo ./import-game-files.sh\n"
         return 1
     fi
 

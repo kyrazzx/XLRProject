@@ -62,15 +62,12 @@ installGameBinaries() {
             "$WORKDIR/Plutonium/plutonium-updater" -d "$WORKDIR/Plutonium" >> "$WORKDIR/Plutonium/logs/updater.log" 2>&1
         fi
 
-        chmod +x "$WORKDIR/Plutonium/T6Server.sh"
         chmod +x "$WORKDIR/Plutonium/XLRManager.sh" 2>/dev/null || true
-        chmod +x "$WORKDIR/Plutonium/start_server_and_monitoring.sh" 2>/dev/null || true
         chmod +x "$WORKDIR/Plutonium/lib/server_core.sh" 2>/dev/null || true
         chmod +x "$WORKDIR/.config/xlr/"*.sh 2>/dev/null || true
-        chmod +x "$WORKDIR/Resources/scripts/"*.sh 2>/dev/null || true
         chmod +x "$WORKDIR/xlr-configure.sh" 2>/dev/null || true
         chmod +x "$WORKDIR/import-game-files.sh" 2>/dev/null || true
-        chmod +x "$WORKDIR/cleanup-download.sh" 2>/dev/null || true
+        chmod +x "$WORKDIR/xlr-update.sh" 2>/dev/null || true
     } > "$log_file" 2>&1 &
     showProgressIndicator "$(getMessage "binary")"
 

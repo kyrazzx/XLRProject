@@ -9,7 +9,6 @@ applyServerCredentials() {
     local key="${server_key:-}"
     local rcon="${rcon_password:-}"
     local config_file="$workdir/Plutonium/server_config.json"
-    local t6_script="$workdir/Plutonium/T6Server.sh"
 
     if [ -z "$key" ] || [ "$key" = "YOURKEY" ]; then
         return 0
@@ -17,10 +16,6 @@ applyServerCredentials() {
 
     if [ -z "$rcon" ]; then
         rcon="$key"
-    fi
-
-    if [ -f "$t6_script" ]; then
-        sed -i "s|^readonly SERVER_KEY=.*|readonly SERVER_KEY=\"$key\"|" "$t6_script"
     fi
 
     if [ -f "$config_file" ]; then

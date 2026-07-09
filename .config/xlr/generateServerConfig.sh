@@ -123,9 +123,7 @@ generateServerConfig() {
     fi
 
     chmod +x "$plutonium_dir/XLRManager.sh" 2>/dev/null || true
-    chmod +x "$plutonium_dir/start_server_and_monitoring.sh" 2>/dev/null || true
     chmod +x "$plutonium_dir/lib/server_core.sh" 2>/dev/null || true
-    chmod +x "$plutonium_dir/T6Server.sh" 2>/dev/null || true
 }
 
 if [ "$1" = "--import" ]; then

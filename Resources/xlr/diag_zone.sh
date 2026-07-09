@@ -57,7 +57,7 @@ echo "=== Top-level zone/ ==="
 ls -la "$ZONE" 2>/dev/null | head -20
 echo ""
 
-for sub in all english; do
+for sub in all english french; do
     if [ -d "$ZONE/$sub" ]; then
         ff=$(find "$ZONE/$sub" -maxdepth 1 -type f \( -name '*.ff' -o -name '*.FF' \) 2>/dev/null | wc -l)
         ipak=$(find "$ZONE/$sub" -maxdepth 1 -type f -name '*.ipak' 2>/dev/null | wc -l)

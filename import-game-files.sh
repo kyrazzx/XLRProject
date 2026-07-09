@@ -21,6 +21,9 @@ if ! linkGameBinaries; then
     exit 1
 fi
 
+source "$DEFAULT_DIR/.config/xlr/repairPermissions.sh"
+xlr_repair_permissions "$WORKDIR"
+
 if [ ! -f "$WORKDIR/Plutonium/plutonium-updater" ]; then
     mkdir -p "$WORKDIR/Plutonium"
     cd "$WORKDIR/Plutonium/" || exit 1

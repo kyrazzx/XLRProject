@@ -7,7 +7,6 @@ fi
 installXlrPython() {
     local workdir="${WORKDIR}"
     local xlr_dir="$workdir/Resources/xlr"
-    local discord_dir="$workdir/Resources/discord"
 
     checkAndInstallCommand python3 python3
     mkdir -p "$xlr_dir" /etc/xlr
@@ -29,12 +28,7 @@ EOF
     fi
 
     mkdir -p "$workdir/Plutonium/storage/xlr"
-    chmod +x "$xlr_dir/"*.py 2>/dev/null || true
-
-    if [ ! -L "$discord_dir/venv" ] && [ -d "$xlr_dir/venv" ]; then
-        rm -rf "$discord_dir/venv" 2>/dev/null || true
-        ln -sfn "$xlr_dir/venv" "$discord_dir/venv"
-    fi
+    chmod +x "$xlr_dir/"*.sh 2>/dev/null || true
 }
 
 if [ "$1" = "--import" ]; then
