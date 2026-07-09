@@ -1,8 +1,31 @@
 #!/bin/bash
 set -uo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKROOT="$(cd "$DIR/../.." && pwd)"
+xlr_resolve_workroot() {
+    local start="${1:-$(pwd)}"
+    local dir
+    dir="$(cd "$start" 2>/dev/null && pwd)" || dir="$start"
+    while [ "$dir" != "/" ]; do
+        if [ -f "$dir/Plutonium/server_config.json" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    if [ -n "${XLR_PROJECT:-}" ] && [ -f "$XLR_PROJECT/Plutonium/server_config.json" ]; then
+        echo "$XLR_PROJECT"
+        return 0
+    fi
+    return 1
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKROOT="$(xlr_resolve_workroot "$SCRIPT_DIR")" || WORKROOT="$(xlr_resolve_workroot "$(pwd)")" || {
+    echo "ERROR: cannot find XLR project root (no Plutonium/server_config.json)." >&2
+    echo "Run from ~/XLRProject or set: export XLR_PROJECT=/home/bo2/XLRProject" >&2
+    exit 1
+}
+
 ZONE="$WORKROOT/Resources/binaries/zone"
 MP_ZONE="$WORKROOT/Server/Multiplayer/zone"
 
@@ -23,6 +46,10 @@ echo ""
 
 if [ ! -d "$ZONE" ]; then
     echo "ERROR: $ZONE does not exist"
+    echo ""
+    echo "Expected layout:"
+    echo "  $WORKROOT/Resources/binaries/zone/"
+    echo "  $WORKROOT/Server/Multiplayer/zone -> symlink to binaries/zone"
     exit 1
 fi
 

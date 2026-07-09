@@ -1,8 +1,29 @@
 #!/bin/bash
 set -uo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKROOT="$(cd "$DIR/../.." && pwd)"
+xlr_resolve_workroot() {
+    local start="${1:-$(pwd)}"
+    local dir
+    dir="$(cd "$start" 2>/dev/null && pwd)" || dir="$start"
+    while [ "$dir" != "/" ]; do
+        if [ -f "$dir/Plutonium/server_config.json" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    if [ -n "${XLR_PROJECT:-}" ] && [ -f "$XLR_PROJECT/Plutonium/server_config.json" ]; then
+        echo "$XLR_PROJECT"
+        return 0
+    fi
+    return 1
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKROOT="$(xlr_resolve_workroot "$SCRIPT_DIR")" || WORKROOT="$(xlr_resolve_workroot "$(pwd)")" || {
+    echo "ERROR: cannot find XLR project root." >&2
+    exit 1
+}
 CONFIG="$WORKROOT/Plutonium/server_config.json"
 TARGET="${1:-all}"
 TAIL_LINES="${2:-120}"
