@@ -252,6 +252,35 @@ xlr_get_run_user_home() {
     getent passwd "$(xlr_get_run_user)" | cut -d: -f6
 }
 
+xlr_ensure_server_runtime_dir() {
+    local config_file="$1"
+    local server_id="$2"
+    local run_user servers_root server_dir log_dir
+
+    servers_root=$(xlr_get_servers_root "$config_file")
+    server_dir="$servers_root/$server_id"
+    log_dir="$server_dir/logs"
+    run_user=$(xlr_get_run_user)
+
+    if [ "$(id -u)" -eq 0 ] && [ "$run_user" != "root" ]; then
+        mkdir -p "$log_dir"
+        chown -R "$run_user:$run_user" "$server_dir"
+        return 0
+    fi
+
+    if ! mkdir -p "$log_dir" 2>/dev/null; then
+        echo "ERROR: cannot create $log_dir (permission denied). Run: sudo chown -R $(id -un):$(id -gn) $servers_root" >&2
+        return 1
+    fi
+
+    if [ ! -w "$server_dir" ]; then
+        echo "ERROR: $server_dir not writable by $(id -un). Run: sudo chown -R $(id -un):$(id -gn) $servers_root" >&2
+        return 1
+    fi
+
+    return 0
+}
+
 xlr_prepare_bootstrapper() {
     local bootstrapper="$1"
     if [ ! -f "$bootstrapper" ]; then
@@ -345,7 +374,9 @@ xlr_launch_server_process() {
 
     log_dir=$(xlr_server_log_dir "$config_file" "$server_id")
     stdout_log="$log_dir/stdout.log"
-    mkdir -p "$log_dir"
+    if ! xlr_ensure_server_runtime_dir "$config_file" "$server_id"; then
+        return 1
+    fi
 
     if [ -z "$game_path" ] || [ "$game_path" = "null" ] || [ ! -d "$game_path" ]; then
         game_path=$(xlr_resolve_game_path "$config_file" "$server_config")
@@ -366,12 +397,11 @@ xlr_launch_server_process() {
     fi
 
     local gamesetting_param=""
-    local run_user wine_runner
+    local run_user wine_runner pid_file state_file
     run_user=$(xlr_get_run_user)
     wine_home=$(xlr_get_run_user_home)
     if [ "$(id -u)" -eq 0 ] && [ "$run_user" != "root" ]; then
         wine_runner="runuser -u $run_user --"
-        chown -R "$run_user:$run_user" "$(xlr_get_servers_root "$config_file")/$server_id" 2>/dev/null || true
     else
         wine_runner=""
     fi
@@ -405,8 +435,16 @@ xlr_launch_server_process() {
     " >> "$log_dir/wrapper.log" 2>&1 &
 
     local wrapper_pid=$!
-    echo "$wrapper_pid" > "$(xlr_server_pid_file "$config_file" "$server_id")"
-    echo "running" > "$(xlr_server_state_file "$config_file" "$server_id")"
+    pid_file=$(xlr_server_pid_file "$config_file" "$server_id")
+    state_file=$(xlr_server_state_file "$config_file" "$server_id")
+    if ! echo "$wrapper_pid" > "$pid_file" 2>/dev/null; then
+        xlr_write_log "$log_dir" "$server_id" "Failed to write $pid_file (permission denied)"
+        kill "$wrapper_pid" 2>/dev/null
+        pkill -P "$wrapper_pid" 2>/dev/null
+        echo "ERROR: cannot write $pid_file. Run: sudo chown -R $(id -un):$(id -gn) $(dirname "$pid_file")" >&2
+        return 1
+    fi
+    echo "running" > "$state_file"
     return 0
 }
 

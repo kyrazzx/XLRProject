@@ -109,7 +109,10 @@ xlr_cmd_start_one() {
         echo -e "${XLR_COLORS[yellow]}$server_id already running (pid $pid)${XLR_COLORS[reset]}"
         return 0
     fi
-    xlr_launch_server_process "$config_file" "$server_config"
+    if ! xlr_launch_server_process "$config_file" "$server_config"; then
+        echo -e "${XLR_COLORS[red]}Failed to start $server_id${XLR_COLORS[reset]}"
+        return 1
+    fi
     echo -e "${XLR_COLORS[green]}Started $server_id on port $port${XLR_COLORS[reset]}"
 }
 

@@ -36,6 +36,52 @@ verifyBinkDll() {
     return 0
 }
 
+verifyCriticalZoneFiles() {
+    local zone_dir="$1"
+    local critical_ff="code_pre_gfx_mp.ff"
+    local ff_path="$zone_dir/$critical_ff"
+    local ff_size
+    local en_ipak="$zone_dir/english/en_base.ipak"
+
+    if [ ! -f "$ff_path" ]; then
+        printf "${COLORS[RED]}Missing:${COLORS[RESET]} %s (required fastfile)\n" "$ff_path"
+        return 1
+    fi
+
+    ff_size=$(stat -c%s "$ff_path" 2>/dev/null || echo 0)
+    if [ "$ff_size" -lt 500000 ]; then
+        printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is too small (%s bytes) — zone files look corrupt or incomplete.\n" "$ff_path" "$ff_size"
+        return 1
+    fi
+
+    if [ ! -f "$en_ipak" ]; then
+        printf "${COLORS[RED]}Missing:${COLORS[RESET]} %s (upload full zone/ tree from pluto_t6_full_game torrent)\n" "$en_ipak"
+        return 1
+    fi
+
+    ff_size=$(stat -c%s "$en_ipak" 2>/dev/null || echo 0)
+    if [ "$ff_size" -lt 100000 ]; then
+        printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is too small (%s bytes) — ipak looks corrupt.\n" "$en_ipak" "$ff_size"
+        return 1
+    fi
+
+    if command -v file >/dev/null 2>&1; then
+        local file_info
+        file_info=$(file -b "$ff_path")
+        if echo "$file_info" | grep -qiE 'ASCII text|HTML|JSON|empty|very short'; then
+            printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is not a valid fastfile (%s).\n" "$ff_path" "$file_info"
+            return 1
+        fi
+        file_info=$(file -b "$en_ipak")
+        if echo "$file_info" | grep -qiE 'ASCII text|HTML|JSON|empty|very short'; then
+            printf "${COLORS[RED]}Invalid:${COLORS[RESET]} %s is not a valid ipak (%s).\n" "$en_ipak" "$file_info"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 verifyManualGameFiles() {
     local binaries_dir="$WORKDIR/Resources/binaries"
     local missing=0
@@ -55,6 +101,10 @@ verifyManualGameFiles() {
     fi
 
     if ! verifyBinkDll "$binaries_dir/binkw32.dll"; then
+        missing=1
+    fi
+
+    if [ "$missing" -eq 0 ] && ! verifyCriticalZoneFiles "$binaries_dir/zone"; then
         missing=1
     fi
 
