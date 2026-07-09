@@ -112,7 +112,76 @@ def _parse_infostring(text):
         info[tokens[i].lower()] = tokens[i + 1]
     return info
 
-def _parse_getstatus_text(text):
+def _strip_player_name(name):
+    cleaned = re.sub('\\^[0-9]', '', name or '')
+    return cleaned.replace("'", '').replace('^7', '').strip()
+
+def _bot_name_cache():
+    if not hasattr(_bot_name_cache, 'payload'):
+        _bot_name_cache.payload = {'ts': 0.0, 'names': set()}
+    now = time.time()
+    if now - _bot_name_cache.payload['ts'] < 60:
+        return _bot_name_cache.payload['names']
+    names = set()
+    if BOTS_TXT_PATH.is_file():
+        try:
+            for line in BOTS_TXT_PATH.read_text(encoding='utf-8').splitlines():
+                base = line.split(',', 1)[0].strip()
+                if base:
+                    names.add(base.lower())
+        except OSError:
+            pass
+    _bot_name_cache.payload = {'ts': now, 'names': names}
+    return names
+
+def server_uses_bot_warfare(config, server_id):
+    if not bot_warfare_enabled(config):
+        return False
+    ids = config.get('bot_warfare', {}).get('server_ids') or []
+    return server_id in ids
+
+def _parse_getstatus_player_line(line):
+    line = line.strip()
+    if not line:
+        return None
+    match = re.match('^(\\d+)\\s+(\\d+)\\s+"([^"]*)"(?:\\s+(\\S+))?$', line)
+    if not match:
+        match = re.match('^(\\d+)\\s+(\\d+)\\s+(\\S+)(?:\\s+(\\S+))?$', line)
+    if match:
+        address = (match.group(4) or '').strip()
+        return {'score': int(match.group(1)), 'ping': int(match.group(2)), 'name': match.group(3), 'address': address, 'guid': ''}
+    cod_match = re.match('^(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(.+)$', line)
+    if cod_match:
+        tail = cod_match.group(5)
+        address = 'bot' if re.search('\\bbot\\b', tail, re.I) else ''
+        ip_match = re.search('(\\d{1,3}(?:\\.\\d{1,3}){3}):\\d+', tail)
+        if ip_match:
+            address = ip_match.group(0)
+        name = cod_match.group(4).replace('^7', '').replace("'", '').strip()
+        return {'score': int(cod_match.group(2)), 'ping': int(cod_match.group(3)), 'name': name, 'address': address, 'guid': cod_match.group(4).replace('^7', '').strip()}
+    return None
+
+def _infostring_bot_count(info):
+    for key in ('bots', 'botclients', 'sv_bots', 'numbots'):
+        if key not in info:
+            continue
+        try:
+            return max(int(info[key]), 0)
+        except ValueError:
+            continue
+    return None
+
+def _infostring_client_count(info):
+    for key in ('clients', 'numplayers'):
+        if key not in info:
+            continue
+        try:
+            return max(int(info[key]), 0)
+        except ValueError:
+            continue
+    return None
+
+def _parse_getstatus_text(text, bot_names=None):
     if not text:
         return None
     body = text
@@ -128,75 +197,47 @@ def _parse_getstatus_text(text):
     rows = body.split('\n')
     infostring = rows[0] if rows else ''
     info = _parse_infostring(infostring)
-    total = 0
-    bots = 0
-    real = 0
+    if bot_names is None:
+        bot_names = _bot_name_cache()
+    clients = []
     for row in rows[1:]:
-        row = row.strip()
-        if not row:
-            continue
-        parts = row.split()
-        if len(parts) < 2:
-            continue
-        ping = None
-        for token in parts[:4]:
-            try:
-                ping = int(token)
-                break
-            except ValueError:
-                continue
-        if ping is None:
-            continue
-        total += 1
-        if ping == 0:
-            bots += 1
-        else:
-            real += 1
-    if 'bots' in info:
-        try:
-            bots = int(info['bots'])
-            if total > 0:
-                real = max(total - bots, 0)
-        except ValueError:
-            pass
-    elif total > 0 and real == 0 and (bots == total):
-        real = 0
-    elif total > 0 and real > 0:
-        bots = max(total - real, 0)
-    if total == 0:
-        for clients_key in ('clients', 'numplayers'):
-            if clients_key not in info:
-                continue
-            try:
-                clients = int(info[clients_key])
-            except ValueError:
-                continue
-            bot_count = 0
-            if 'bots' in info:
+        client = _parse_getstatus_player_line(row)
+        if client is not None:
+            clients.append(client)
+    if clients:
+        real = sum((1 for client in clients if not is_bot_client(client, bot_names)))
+        total = len(clients)
+        bots = total - real
+        max_clients = 0
+        for key in ('sv_maxclients', 'sv_privateclients', 'maxclients'):
+            if key in info:
                 try:
-                    bot_count = int(info['bots'])
+                    max_clients = int(info[key])
+                    break
                 except ValueError:
-                    bot_count = 0
-            real = max(clients - bot_count, 0)
-            bots = bot_count
-            total = clients
+                    continue
+        return {'total': total, 'bots': bots, 'real': real, 'max_clients': max_clients, 'info': info, 'reliable': True}
+    clients_total = None
+    for clients_key in ('clients', 'numplayers'):
+        if clients_key not in info:
+            continue
+        try:
+            clients_total = int(info[clients_key])
             break
-    if total == 0 and real == 0 and ('clients' not in info) and ('numplayers' not in info):
+        except ValueError:
+            continue
+    if clients_total is None:
         return None
-    max_clients = 0
-    for key in ('sv_maxclients', 'sv_privateclients', 'maxclients'):
-        if key in info:
-            try:
-                max_clients = int(info[key])
-                break
-            except ValueError:
-                continue
-    return {'total': total, 'bots': bots, 'real': real, 'max_clients': max_clients, 'info': info}
+    bot_count = _infostring_bot_count(info)
+    if bot_count is None:
+        return None
+    real = max(clients_total - bot_count, 0)
+    return {'total': clients_total, 'bots': bot_count, 'real': real, 'max_clients': 0, 'info': info, 'reliable': True}
 
-def query_server_getstatus(host, port, timeout=3.0):
+def query_server_getstatus(host, port, timeout=3.0, bot_names=None):
     for payload in (b'\xff\xff\xff\xffgetstatus\n', b'\xff\xff\xff\xffgetstatus'):
         text = _udp_oob_collect(host, port, payload, timeout=timeout)
-        result = _parse_getstatus_text(text)
+        result = _parse_getstatus_text(text, bot_names=bot_names)
         if result is not None:
             return result
     return None
@@ -358,15 +399,22 @@ def is_server_running(port):
             return True
     return False
 
-def is_bot_client(client):
-    ping = client.get('ping')
-    if ping == 0:
-        return True
+def is_bot_client(client, bot_names=None):
     address = str(client.get('address') or '').strip().lower()
     if address == 'bot':
         return True
+    if bot_names is None:
+        bot_names = _bot_name_cache()
+    if bot_names:
+        name = _strip_player_name(client.get('name') or '').lower()
+        plain = re.sub('^\\[[^\\]]+\\]', '', name).strip()
+        if name in bot_names or plain in bot_names:
+            return True
     guid = str(client.get('guid') or '').strip()
-    if guid in ('', '0'):
+    if guid == '0':
+        return True
+    ping = client.get('ping')
+    if ping == 0 and address in ('', 'bot'):
         return True
     return False
 
@@ -402,10 +450,11 @@ def _stdout_session_lines(lines, port=None):
         session_start = index
     return lines[session_start:]
 
-def estimate_players_from_stdout(log_path, port=None, max_bytes=524288):
-    path = Path(log_path)
-    if not path.is_file():
+def estimate_players_from_stdout(log_path, port=None, max_bytes=524288, bot_names=None):
+    path = Path(log_path) if log_path else None
+    if not path or not path.is_file():
         return 0
+    bot_names = bot_names or set()
     try:
         size = path.stat().st_size
         with open(path, 'rb') as handle:
@@ -418,12 +467,62 @@ def estimate_players_from_stdout(log_path, port=None, max_bytes=524288):
     for line in lines:
         connect = CONNECT_RE.search(line)
         if connect:
-            online.add(connect.group(1).lower())
+            name = _strip_player_name(connect.group(1)).lower()
+            if name and name not in bot_names:
+                online.add(name)
             continue
         disconnect = DISCONNECT_RE.search(line)
         if disconnect:
-            online.discard(disconnect.group(1).lower())
+            online.discard(_strip_player_name(disconnect.group(1)).lower())
     return len(online)
+
+def resolve_install_dir(config):
+    configured = (config.get('general_config', {}) or {}).get('install_dir', '')
+    candidates = []
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(WORKROOT / 'Plutonium')
+    for path in candidates:
+        if path.is_file():
+            path = path.parent
+        if (path / 'bin' / 'plutonium-bootstrapper-win32.exe').is_file():
+            return path
+    return WORKROOT / 'Plutonium'
+
+def resolve_server_log_paths(config, server):
+    install_dir = resolve_install_dir(config)
+    servers_root = (config.get('general_config', {}) or {}).get('servers_root', './servers')
+    root = Path(servers_root) if str(servers_root).startswith('/') else install_dir / str(servers_root).lstrip('./')
+    sid = server.get('id', '')
+    stdout_log = root / sid / 'logs' / 'stdout.log'
+    game_log = install_dir / 'storage' / 't6' / 'logs' / (server.get('log_file') or '')
+    return (stdout_log, game_log)
+
+def estimate_humans_from_logs(config, server, port=None, bot_names=None):
+    bot_names = bot_names or set()
+    (stdout_log, game_log) = resolve_server_log_paths(config, server)
+    total = 0
+    for path in (stdout_log, game_log):
+        count = estimate_players_from_stdout(path, port=port, bot_names=bot_names)
+        if count > total:
+            total = count
+    return total
+
+def api_human_player_count(server, config, public_ip=None):
+    entry = match_plutonium_server(server, public_ip=public_ip)
+    if not entry:
+        return None
+    count = plutonium_api_real_count(entry)
+    return count if count >= 0 else None
+
+def _pick_human_count(candidates, max_clients=18):
+    values = sorted({int(value) for value in candidates if value is not None and int(value) >= 0})
+    if not values:
+        return 0
+    positive = [value for value in values if value > 0]
+    if positive:
+        return min(min(positive), max_clients)
+    return 0
 
 def _player_query_hosts(rcon_host, public_ip=None):
     hosts = []
@@ -446,54 +545,69 @@ def conntrack_real_player_count(port, public_ip=None, max_clients=18):
         return None
     return min(len(ips), max_clients)
 
-def getstatus_player_count(host, port, public_ip=None, max_clients=18):
+def _server_stdout_log(config, server_id):
+    server = {'id': server_id}
+    return resolve_server_log_paths(config, server)[0]
+
+def getstatus_player_count(host, port, public_ip=None, max_clients=18, bot_names=None):
     for target in _player_query_hosts(host, public_ip):
-        info = query_server_getstatus(target, port)
-        if info is not None:
+        info = query_server_getstatus(target, port, bot_names=bot_names)
+        if info is not None and info.get('reliable'):
             return min(int(info.get('real', 0)), max_clients)
     return None
 
-def rcon_real_player_count(host, port, password, max_clients=18):
-    status = rcon_query(host, port, password, 'status')
-    clients = parse_status_clients(status)
-    if clients:
-        return min(count_real_status_clients(clients), max_clients)
-    derived = parse_status_player_count(status)
-    if derived > 0:
-        return min(derived, max_clients)
-    if status.strip():
-        return 0
+def rcon_real_player_count(host, port, password, max_clients=18, public_ip=None, bot_names=None):
+    for target in _player_query_hosts(host, public_ip):
+        status = rcon_query(target, port, password, 'status')
+        clients = parse_status_clients(status)
+        if clients:
+            count = sum((1 for client in clients if not is_bot_client(client, bot_names)))
+            return min(count, max_clients)
+        derived = parse_status_player_count(status)
+        if derived > 0:
+            return min(derived, max_clients)
     return None
 
-def get_server_player_count(host, port, password, stdout_log=None, max_clients=18, public_ip=None):
-    gs_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=max_clients)
+def get_server_player_count(host, port, password, stdout_log=None, max_clients=18, public_ip=None, server_id=None, config=None):
+    server = {'id': server_id, 'port': port, 'name': server_id}
+    if config and server_id:
+        for item in config.get('servers', []):
+            if item.get('id') == server_id:
+                server = item
+                break
+    bot_names = _bot_name_cache() if server_id and config and server_uses_bot_warfare(config, server_id) else set()
+    candidates = []
+    gs_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=max_clients, bot_names=bot_names)
     if gs_count is not None:
-        return gs_count
-    rcon_count = rcon_real_player_count(host, port, password, max_clients=max_clients)
-    if rcon_count is not None:
-        return rcon_count
+        candidates.append(gs_count)
+    api_count = api_human_player_count(server, config, public_ip=public_ip) if config else None
+    if api_count is not None:
+        candidates.append(api_count)
     ct_count = conntrack_real_player_count(port, public_ip=public_ip, max_clients=max_clients)
     if ct_count is not None:
-        return ct_count
-    return 0
+        candidates.append(ct_count)
+    if config and server_id:
+        log_count = estimate_humans_from_logs(config, server, port=port, bot_names=bot_names)
+        if log_count > 0:
+            candidates.append(log_count)
+    rcon_count = rcon_real_player_count(host, port, password, max_clients=max_clients, public_ip=public_ip, bot_names=bot_names)
+    if rcon_count is not None:
+        candidates.append(rcon_count)
+    return _pick_human_count(candidates, max_clients=max_clients)
 
-def probe_server_runtime(host, port, password, public_ip=None):
+def probe_server_runtime(host, port, password, public_ip=None, server_id=None, config=None):
+    rcon_count = rcon_real_player_count(host, port, password, public_ip=public_ip)
+    if rcon_count is not None:
+        return (True, rcon_count)
     gs_count = getstatus_player_count(host, port, public_ip=public_ip)
     if gs_count is not None:
         return (True, gs_count)
-    rcon_count = rcon_real_player_count(host, port, password)
-    if rcon_count is not None:
-        return (True, rcon_count)
-    ct_count = conntrack_real_player_count(port, public_ip=public_ip)
-    if ct_count is not None:
-        return (True, ct_count)
     return (False, 0)
 
 def collect_server_statuses(config):
     general = config.get('general_config', {})
     host = general.get('rcon_ip', '127.0.0.1')
     public_ip = resolve_public_ip(general)
-    api_data = fetch_plutonium_servers()
     statuses = []
     total_players = 0
     online_servers = 0
@@ -509,27 +623,15 @@ def collect_server_statuses(config):
         name = server.get('name', sid)
         short = SERVER_SHORT_LABELS.get(sid, sid.upper()[:4])
         max_clients = int(server.get('additional_params', {}).get('sv_maxclients', 18))
-        api_entry = match_plutonium_server(server, api_data=api_data, public_ip=public_ip) if api_data else None
+        online = is_server_running(port)
         players = 0
-        if api_entry is not None:
-            online = True
-            players = plutonium_api_real_count(api_entry)
-            local_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=max_clients)
-            if local_count is not None:
-                players = min(players, local_count) if players > 0 else local_count
-            else:
-                rcon_count = get_server_player_count(host, port, password, max_clients=max_clients, public_ip=public_ip)
-                if rcon_count > 0:
-                    players = min(players, rcon_count) if players > 0 else rcon_count
+        if online:
+            players = get_server_player_count(host, port, password, max_clients=max_clients, public_ip=public_ip, server_id=sid, config=config)
         else:
-            online = is_server_running(port)
-            if online:
-                players = get_server_player_count(host, port, password, max_clients=max_clients, public_ip=public_ip)
-            else:
-                (rcon_online, rcon_players) = probe_server_runtime(host, port, password, public_ip=public_ip)
-                if rcon_online:
-                    online = True
-                    players = min(rcon_players, max_clients)
+            (rcon_online, rcon_players) = probe_server_runtime(host, port, password, public_ip=public_ip, server_id=sid, config=config)
+            if rcon_online:
+                online = True
+                players = min(rcon_players, max_clients)
         if online:
             online_servers += 1
             total_players += players
