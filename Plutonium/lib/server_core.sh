@@ -133,6 +133,26 @@ xlr_is_wrapper_running() {
     pgrep -f "net_port \"$port\"" | head -n 1
 }
 
+xlr_get_wrapper_pid() {
+    local config_file="$1"
+    local server_id="$2"
+    local pid_file pid
+    pid_file=$(xlr_server_pid_file "$config_file" "$server_id")
+    [ ! -f "$pid_file" ] && return 1
+    pid=$(cat "$pid_file" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "$pid"
+        return 0
+    fi
+    return 1
+}
+
+xlr_is_wrapper_alive() {
+    local config_file="$1"
+    local server_id="$2"
+    xlr_get_wrapper_pid "$config_file" "$server_id" >/dev/null
+}
+
 xlr_is_server_running() {
     local config_file="$1"
     local server_id="$2"
@@ -414,8 +434,14 @@ xlr_server_log_shows_limbo() {
 
 xlr_process_uptime_seconds() {
     local pid="$1"
+    [ -z "$pid" ] && echo 0 && return 0
+    if [ ! -d "/proc/$pid" ]; then
+        echo 0
+        return 0
+    fi
     local started_at now
     started_at=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
+    [ "$started_at" -le 0 ] && echo 0 && return 0
     now=$(date +%s)
     echo $((now - started_at))
 }

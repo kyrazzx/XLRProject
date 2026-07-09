@@ -181,8 +181,19 @@ xlr_monitor_once() {
         max_memory=$(echo "$server" | jq -r '.resource_limits.max_memory_mb // 4096')
 
         if ! pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
-            if xlr_is_wrapper_running "$port" >/dev/null; then
-                xlr_write_log "$monitoring_log_dir" "$server_id" "Game process down, wrapper will restart"
+            local wrapper_pid wrapper_uptime
+            if wrapper_pid=$(xlr_get_wrapper_pid "$config_file" "$server_id"); then
+                wrapper_uptime=$(xlr_process_uptime_seconds "$wrapper_pid")
+                # Wrapper can stay alive while game crashes in a loop; recover if this persists.
+                if [ "$wrapper_uptime" -ge 45 ]; then
+                    xlr_write_log "$monitoring_log_dir" "$server_id" "Wrapper alive but no game process for ${wrapper_uptime}s, forcing full restart"
+                    xlr_send_discord_webhook "$webhook_url" "XLR: $server_id wrapper alive but game is down, forcing restart..."
+                    xlr_stop_server "$config_file" "$server"
+                    sleep 2
+                    xlr_launch_server_process "$config_file" "$server"
+                else
+                    xlr_write_log "$monitoring_log_dir" "$server_id" "Game process down, wrapper bootstrapping (${wrapper_uptime}s)"
+                fi
                 continue
             fi
             xlr_write_log "$monitoring_log_dir" "$server_id" "Server down, restarting"

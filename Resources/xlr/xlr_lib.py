@@ -433,6 +433,15 @@ def get_server_player_count(host, port, password, stdout_log=None, max_clients=1
     return 0
 
 
+def probe_server_runtime(host, port, password):
+    """Best-effort runtime probe that does not depend on process names."""
+    status = rcon_query(host, port, password, "status")
+    clients = parse_status_clients(status)
+    online = bool(status and status.strip())
+    players = min(len(real_clients_only(clients)), 18)
+    return online, players
+
+
 def collect_server_statuses(config):
     general = config.get("general_config", {})
     host = general.get("rcon_ip", "127.0.0.1")
@@ -446,7 +455,10 @@ def collect_server_statuses(config):
         if not server.get("enabled", True):
             continue
         sid = server.get("id", "server")
-        port = int(server.get("port"))
+        try:
+            port = int(server.get("port"))
+        except (TypeError, ValueError):
+            continue
         password = server.get("rcon_password") or server.get("key", "")
         name = server.get("name", sid)
         short = SERVER_SHORT_LABELS.get(sid, sid.upper()[:4])
@@ -469,6 +481,12 @@ def collect_server_statuses(config):
                     stdout_log,
                     max_clients=max_clients,
                 )
+            else:
+                # Fallback: if process detection fails, trust live RCON response.
+                rcon_online, rcon_players = probe_server_runtime(host, port, password)
+                if rcon_online:
+                    online = True
+                    players = min(rcon_players, max_clients)
         if online:
             online_servers += 1
             total_players += players

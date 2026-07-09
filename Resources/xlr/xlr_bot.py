@@ -115,8 +115,11 @@ class XLRBot(commands.Bot):
         if not self._branding_applied:
             await self._apply_branding()
             self._branding_applied = True
-        statuses, total_players, _ = collect_server_statuses(load_config())
-        await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
+        try:
+            statuses, total_players, _ = collect_server_statuses(load_config())
+            await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
+        except Exception:
+            logger.exception("Initial status update failed")
 
     async def _apply_branding(self):
         if not LOGO_PATH.is_file():
@@ -129,41 +132,49 @@ class XLRBot(commands.Bot):
 
     @tasks.loop(seconds=30)
     async def status_loop(self):
-        self.config = load_config()
-        statuses, total_players, _ = collect_server_statuses(self.config)
-        await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
+        try:
+            self.config = load_config()
+            statuses, total_players, _ = collect_server_statuses(self.config)
+            await self.change_presence(activity=discord.Game(name=format_discord_presence(statuses, total_players)))
+        except Exception:
+            logger.exception("status_loop failed")
 
     @tasks.loop(seconds=15)
     async def reports_loop(self):
         from cogs.xlr_servers import moderation_channel_id
 
         conn = connect_db()
-        init_db(conn)
-        rows = conn.execute(
-            "SELECT * FROM reports WHERE status = 'pending' AND discord_message_id IS NULL ORDER BY id LIMIT 5"
-        ).fetchall()
-        channel_id = moderation_channel_id(self.config)
-        if not channel_id or not rows:
-            return
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            return
-        for row in rows:
-            embed = xlr_embed(self, title=f"Player Report #{row['id']}", color=0xFF3355)
-            embed.add_field(name="Server", value=row["server_id"] or "unknown", inline=True)
-            embed.add_field(name="Source", value=row["source"] or "unknown", inline=True)
-            embed.add_field(name="Reporter", value=row["reporter_name"] or "unknown", inline=True)
-            embed.add_field(name="Reporter ID", value=row["reporter_id"] or "n/a", inline=True)
-            embed.add_field(name="Target", value=row["target_name"] or "unknown", inline=True)
-            embed.add_field(name="Target ID", value=row["target_id"] or "n/a", inline=True)
-            embed.add_field(name="Reason", value=row["reason"] or "n/a", inline=False)
-            embed.set_footer(text="Use !gameban / !gameunban / !dismiss <id> · XLR EU · Black Ops II")
-            message = await channel.send(embed=embed)
-            conn.execute(
-                "UPDATE reports SET discord_message_id = ? WHERE id = ?",
-                (str(message.id), row["id"]),
-            )
-            conn.commit()
+        try:
+            init_db(conn)
+            rows = conn.execute(
+                "SELECT * FROM reports WHERE status = 'pending' AND discord_message_id IS NULL ORDER BY id LIMIT 5"
+            ).fetchall()
+            channel_id = moderation_channel_id(self.config)
+            if not channel_id or not rows:
+                return
+            channel = self.get_channel(int(channel_id))
+            if not channel:
+                return
+            for row in rows:
+                embed = xlr_embed(self, title=f"Player Report #{row['id']}", color=0xFF3355)
+                embed.add_field(name="Server", value=row["server_id"] or "unknown", inline=True)
+                embed.add_field(name="Source", value=row["source"] or "unknown", inline=True)
+                embed.add_field(name="Reporter", value=row["reporter_name"] or "unknown", inline=True)
+                embed.add_field(name="Reporter ID", value=row["reporter_id"] or "n/a", inline=True)
+                embed.add_field(name="Target", value=row["target_name"] or "unknown", inline=True)
+                embed.add_field(name="Target ID", value=row["target_id"] or "n/a", inline=True)
+                embed.add_field(name="Reason", value=row["reason"] or "n/a", inline=False)
+                embed.set_footer(text="Use !gameban / !gameunban / !dismiss <id> · XLR EU · Black Ops II")
+                message = await channel.send(embed=embed)
+                conn.execute(
+                    "UPDATE reports SET discord_message_id = ? WHERE id = ?",
+                    (str(message.id), row["id"]),
+                )
+                conn.commit()
+        except Exception:
+            logger.exception("reports_loop failed")
+        finally:
+            conn.close()
 
     @status_loop.before_loop
     async def before_status_loop(self):

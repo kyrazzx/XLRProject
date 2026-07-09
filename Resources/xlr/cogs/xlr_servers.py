@@ -73,7 +73,17 @@ class XLRServers(commands.Cog):
 
     @commands.command(name="stats")
     async def stats(self, ctx):
-        data = await asyncio.to_thread(fetch_platform_stats)
+        try:
+            data = await asyncio.to_thread(fetch_platform_stats)
+        except Exception:
+            await ctx.send(
+                embed=xlr_embed(
+                    self.bot,
+                    description="Stats are temporarily unavailable. Try again in a few seconds.",
+                    color=XLR_DANGER,
+                )
+            )
+            return
         embed = xlr_embed(self.bot, title="XLR Server Stats")
         embed.add_field(name="Players Online", value=str(data["total_players"]), inline=True)
         embed.add_field(name="Servers Online", value=f"{data['online_servers']}/{len(data['servers'])}", inline=True)
