@@ -43,6 +43,12 @@ xlr_repair_permissions() {
 
     echo "[XLR] Repairing ownership ($run_user:$run_group) and modes under $workdir"
 
+    if [ -f "$workdir/.config/xlr/normalizeLineEndings.sh" ]; then
+        # shellcheck source=/dev/null
+        source "$workdir/.config/xlr/normalizeLineEndings.sh" --import
+        xlr_normalize_line_endings "$workdir" || true
+    fi
+
     local path
     for path in \
         "$workdir/Plutonium" \
