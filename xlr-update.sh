@@ -32,6 +32,7 @@ merge_local_config() {
         .discord_config.status_channel_id = ($old.discord_config.status_channel_id // .discord_config.status_channel_id) |
         .discord_config.guild_id = ($old.discord_config.guild_id // .discord_config.guild_id) |
         .discord_config.token = "" |
+        .general_config.public_ip = ($old.general_config.public_ip // .general_config.public_ip) |
         .monitoring_config.discord_webhook = ($old.monitoring_config.discord_webhook // .monitoring_config.discord_webhook) |
         .customization = ($new.customization * ($old.customization // {})) |
         .customization.owner = ($new.customization.owner * ($old.customization.owner // {})) |

@@ -18,10 +18,12 @@ from xlr_lib import (
     init_db,
     is_banned,
     is_bot_client,
+    is_real_api_player,
     match_plutonium_server,
     load_config,
     connect_db,
     parse_status_clients,
+    resolve_public_ip,
     rcon_query,
     rcon_say,
     resolve_ips_from_conntrack,
@@ -400,7 +402,7 @@ def record_players_from_api(conn, config, server):
     separately), so this keeps the player DB and unique-player stats accurate
     even when RCON is unavailable.
     """
-    public_ip = config.get("general_config", {}).get("public_ip") or None
+    public_ip = resolve_public_ip(config.get("general_config", {}))
     entry = match_plutonium_server(
         {"port": server["port"], "name": server.get("name")},
         public_ip=public_ip,
@@ -408,6 +410,8 @@ def record_players_from_api(conn, config, server):
     if not entry:
         return
     for player in entry.get("players") or []:
+        if not is_real_api_player(player):
+            continue
         pid = str(player.get("id") or "").strip()
         pname = (player.get("username") or "").strip()
         if not pid.isdigit() or not pname:

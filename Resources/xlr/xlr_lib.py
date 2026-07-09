@@ -235,6 +235,44 @@ def query_server_getstatus(host, port, timeout=1.5):
 PLUTONIUM_API_URL = "https://plutonium.pw/api/servers"
 _PLUTO_CACHE = {"ts": 0.0, "data": None}
 _PLUTO_CACHE_TTL = 10  # seconds
+_PUBLIC_IP_CACHE = None
+
+
+def detect_public_ip(timeout=4):
+    for url in (
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+    ):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "XLR-Bot/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                ip = resp.read().decode("utf-8", errors="ignore").strip()
+            if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", ip):
+                return ip
+        except Exception:
+            continue
+    return None
+
+
+def resolve_public_ip(general=None, allow_detect=True):
+    """Public IPv4 used to match our servers in the Plutonium API."""
+    global _PUBLIC_IP_CACHE
+    if general is None:
+        general = load_config().get("general_config", {})
+    ip = (general.get("public_ip") or "").strip()
+    if ip:
+        return ip
+    env_ip = os.environ.get("XLR_PUBLIC_IP", "").strip()
+    if env_ip:
+        return env_ip
+    if _PUBLIC_IP_CACHE:
+        return _PUBLIC_IP_CACHE
+    if allow_detect:
+        detected = detect_public_ip()
+        if detected:
+            _PUBLIC_IP_CACHE = detected
+            return detected
+    return None
 
 
 def fetch_plutonium_servers(force=False, timeout=8):
@@ -263,7 +301,7 @@ def fetch_plutonium_servers(force=False, timeout=8):
 
 
 def match_plutonium_server(server, api_data=None, public_ip=None):
-    """Find our server in the Plutonium API list by ip/port/hostname."""
+    """Find our server in the Plutonium API list by port, public IP, and hostname."""
     if api_data is None:
         api_data = fetch_plutonium_servers()
     if not api_data:
@@ -273,20 +311,61 @@ def match_plutonium_server(server, api_data=None, public_ip=None):
     except (TypeError, ValueError):
         return None
     name = (server.get("name") or "").strip()
-    port_fallback = None
+    candidates = []
     for entry in api_data:
         try:
             if int(entry.get("port")) != port:
                 continue
         except (TypeError, ValueError):
             continue
-        if public_ip and entry.get("ip") != public_ip:
+        entry_ip = (entry.get("ip") or "").strip()
+        if public_ip and entry_ip != public_ip:
             continue
+        candidates.append(entry)
+    if not candidates:
+        return None
+    for entry in candidates:
         hostname = entry.get("hostname") or ""
         if name and (hostname.startswith(name) or name in hostname):
             return entry
-        port_fallback = port_fallback or entry
-    return port_fallback
+    if public_ip:
+        return candidates[0] if len(candidates) == 1 else None
+    return candidates[0]
+
+
+def plutonium_api_bot_count(entry):
+    if not entry:
+        return 0
+    bots = entry.get("bots")
+    return int(bots) if isinstance(bots, (int, float)) else 0
+
+
+def is_real_api_player(player):
+    pid = player.get("id")
+    if pid is None:
+        return False
+    try:
+        return int(pid) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def plutonium_api_real_count(entry):
+    """Real player count from a Plutonium API server entry.
+
+    Prefer ``clients - bots`` (master server fields). The ``players`` list is
+    only used as a fallback and is filtered to positive Plutonium IDs.
+    """
+    if not entry:
+        return 0
+    clients = entry.get("clients")
+    bots = plutonium_api_bot_count(entry)
+    if isinstance(clients, (int, float)):
+        return max(int(clients) - bots, 0)
+    players = entry.get("players")
+    if isinstance(players, list):
+        return len([player for player in players if is_real_api_player(player)])
+    return 0
 
 
 def plutonium_real_player_count(server, api_data=None, public_ip=None):
@@ -294,11 +373,7 @@ def plutonium_real_player_count(server, api_data=None, public_ip=None):
     entry = match_plutonium_server(server, api_data=api_data, public_ip=public_ip)
     if entry is None:
         return None, None
-    players = entry.get("players")
-    real = len(players) if isinstance(players, list) else 0
-    bots = entry.get("bots")
-    bots = int(bots) if isinstance(bots, (int, float)) else 0
-    return real, bots
+    return plutonium_api_real_count(entry), plutonium_api_bot_count(entry)
 
 
 SERVER_SHORT_LABELS = {
@@ -445,7 +520,7 @@ def probe_server_runtime(host, port, password):
 def collect_server_statuses(config):
     general = config.get("general_config", {})
     host = general.get("rcon_ip", "127.0.0.1")
-    public_ip = general.get("public_ip") or None
+    public_ip = resolve_public_ip(general)
     servers_root = WORKROOT / "Plutonium" / "servers"
     api_data = fetch_plutonium_servers()
     statuses = []
@@ -468,8 +543,16 @@ def collect_server_statuses(config):
         players = 0
         if api_entry is not None:
             online = True
-            api_players = api_entry.get("players")
-            players = len(api_players) if isinstance(api_players, list) else 0
+            players = plutonium_api_real_count(api_entry)
+            rcon_count = get_server_player_count(
+                host,
+                port,
+                password,
+                servers_root / sid / "logs" / "stdout.log",
+                max_clients=max_clients,
+            )
+            if rcon_count > 0:
+                players = min(players, rcon_count)
         else:
             online = is_server_running(port)
             if online:

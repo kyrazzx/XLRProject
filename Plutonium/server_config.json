@@ -6,6 +6,7 @@
         "executable_path": "./bin/plutonium-bootstrapper-win32.exe",
         "servers_root": "./servers",
         "rcon_ip": "127.0.0.1",
+        "public_ip": "",
         "backup_dir": "/opt/T6Server/backups"
     },
     "security_hardening": {
