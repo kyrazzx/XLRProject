@@ -110,13 +110,18 @@ xlr_server_state_file() {
 
 xlr_find_server_pid() {
     local port="$1"
-    local pid comm cmdline
+    local pid comm cmdline rss_kb
     while IFS= read -r pid; do
         [ -z "$pid" ] && continue
         comm=$(ps -p "$pid" -o comm= 2>/dev/null | tr -d ' ')
         case "$comm" in
             bash|sh|nohup|runuser|sudo|sleep|nice) continue ;;
         esac
+        rss_kb=$(ps -p "$pid" -o rss= 2>/dev/null | tr -d ' ')
+        rss_kb=${rss_kb:-0}
+        if [ "$rss_kb" -lt 51200 ]; then
+            continue
+        fi
         cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
         if echo "$cmdline" | grep -Eq "net_port[[:space:]]+\"?${port}\"?"; then
             echo "$pid"
@@ -511,7 +516,16 @@ xlr_port_listening() {
 xlr_server_log_shows_limbo() {
     local stdout_log="$1"
     [ ! -f "$stdout_log" ] && return 1
+    if tail -80 "$stdout_log" | grep -qiE 'Loading fastfile|Unloading fastfile|Loading level'; then
+        return 1
+    fi
     tail -200 "$stdout_log" | grep -qiE "No current map loaded|No map specified in sv_mapRotation|map_restart will do nothing"
+}
+
+xlr_server_log_shows_missing_zone() {
+    local stdout_log="$1"
+    [ ! -f "$stdout_log" ] && return 1
+    tail -300 "$stdout_log" | grep -qiE 'ipak file not found: (en_base|common_mp|code_post_gfx_mp|lowmip)'
 }
 
 xlr_process_uptime_seconds() {
@@ -541,8 +555,12 @@ xlr_server_needs_recovery() {
         return 0
     fi
 
+    if xlr_server_log_shows_missing_zone "$stdout_log"; then
+        return 1
+    fi
+
     uptime_sec=$(xlr_process_uptime_seconds "$pid")
-    if [ "$uptime_sec" -ge 90 ] && ! xlr_port_listening "$port"; then
+    if [ "$uptime_sec" -ge 180 ] && ! xlr_port_listening "$port"; then
         return 0
     fi
 
