@@ -1,3 +1,31 @@
+* text=auto eol=lf
+
 *.sh text eol=lf
+*.bash text eol=lf
 *.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cfg text eol=lf
+*.gsc text eol=lf
+*.txt text eol=lf
+*.service text eol=lf
+
 xlr-update.sh text eol=lf
+xlr-configure.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ff binary
+*.ipak binary
+*.dll binary
+*.exe binary
+*.tar binary
+*.tar.gz binary
+*.zip binary
+*.torrent binary

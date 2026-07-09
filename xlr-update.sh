@@ -1,10 +1,5 @@
 #!/bin/bash
-
-
-
 set -euo pipefail
-
-
 
 DEFAULT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
