@@ -142,7 +142,7 @@ def server_uses_bot_warfare(config, server_id):
 
 def _parse_getstatus_player_line(line):
     line = line.strip()
-    if not line:
+    if not line or line.startswith('\\'):
         return None
     match = re.match('^(\\d+)\\s+(\\d+)\\s+"([^"]*)"(?:\\s+(\\S+))?$', line)
     if not match:
@@ -150,15 +150,133 @@ def _parse_getstatus_player_line(line):
     if match:
         address = (match.group(4) or '').strip()
         return {'score': int(match.group(1)), 'ping': int(match.group(2)), 'name': match.group(3), 'address': address, 'guid': ''}
-    cod_match = re.match('^(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(.+)$', line)
+    cod_match = re.match('^(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+"(.*?)"(?:\\s+(\\S+))?$', line)
+    if not cod_match:
+        cod_match = re.match('^(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)(?:\\s+(\\S+))?$', line)
     if cod_match:
-        tail = cod_match.group(5)
-        address = 'bot' if re.search('\\bbot\\b', tail, re.I) else ''
-        ip_match = re.search('(\\d{1,3}(?:\\.\\d{1,3}){3}):\\d+', tail)
+        guid = cod_match.group(4).replace('^7', '').replace("'", '').strip()
+        name = cod_match.group(5).replace('^7', '').replace("'", '').strip()
+        address = ''
+        if cod_match.lastindex and cod_match.lastindex >= 6:
+            address = (cod_match.group(6) or '').strip()
+        if not address and re.search('\\bbot\\b', line, re.I):
+            address = 'bot'
+        ip_match = re.search('(\\d{1,3}(?:\\.\\d{1,3}){3}):\\d+', line)
         if ip_match:
             address = ip_match.group(0)
-        name = cod_match.group(4).replace('^7', '').replace("'", '').strip()
-        return {'score': int(cod_match.group(2)), 'ping': int(cod_match.group(3)), 'name': name, 'address': address, 'guid': cod_match.group(4).replace('^7', '').strip()}
+        return {'score': int(cod_match.group(2)), 'ping': int(cod_match.group(3)), 'name': name, 'address': address, 'guid': guid}
+    return None
+
+def _iter_getstatus_clients(rows, bot_names=None):
+    clients = []
+    for row in rows[1:]:
+        client = _parse_getstatus_player_line(row)
+        if client is not None:
+            clients.append(client)
+    return clients
+
+def _extract_status_info(text):
+    info = {}
+    if not text:
+        return info
+    for line in text.replace('\r\n', '\n').split('\n'):
+        if '\\' not in line:
+            continue
+        if any((key in line for key in ('\\hostname\\', '\\clients\\', '\\gamename\\', '\\mapname\\'))):
+            info.update(_parse_infostring(line))
+    if not info.get('clients'):
+        tokens = text.split('\\')
+        if tokens and tokens[0] == '':
+            tokens = tokens[1:]
+        for i in range(0, len(tokens) - 1, 2):
+            info[tokens[i].lower()] = tokens[i + 1]
+    return info
+
+def _loose_scan_player_lines(text, bot_names=None):
+    if bot_names is None:
+        bot_names = _bot_name_cache()
+    humans = 0
+    bots = 0
+    for line in text.replace('\r', '\n').split('\n'):
+        line = line.strip()
+        if not line or '\\hostname\\' in line or '\\clients\\' in line:
+            continue
+        client = _parse_getstatus_player_line(line)
+        if client:
+            if is_bot_client(client, bot_names):
+                bots += 1
+            else:
+                humans += 1
+            continue
+        if not re.match('^\\d', line):
+            continue
+        if re.search('\\bbot\\b', line, re.I):
+            bots += 1
+        elif re.search('\\d{1,3}(?:\\.\\d{1,3}){3}:\\d+', line):
+            humans += 1
+    return (humans, bots)
+
+def _parse_getstatus_text(text, bot_names=None):
+    if not text:
+        return None
+    body = text
+    for marker in ('statusResponse', 'infoResponse', 'infoPrint'):
+        idx = text.find(marker)
+        if idx != -1:
+            body = text[idx + len(marker):].lstrip('\r\n')
+            break
+    if body == text and ('\\hostname\\' in text or '\\clients\\' in text):
+        body = text.lstrip('\r\n')
+    rows = body.split('\n')
+    info = _extract_status_info(text)
+    if bot_names is None:
+        bot_names = _bot_name_cache()
+    clients = _iter_getstatus_clients(rows, bot_names=bot_names)
+    if not clients:
+        for line in text.replace('\r', '\n').split('\n'):
+            client = _parse_getstatus_player_line(line.strip())
+            if client is not None:
+                clients.append(client)
+    if clients:
+        real = sum((1 for client in clients if not is_bot_client(client, bot_names)))
+        total = len(clients)
+        bots = total - real
+        max_clients = 0
+        for key in ('sv_maxclients', 'sv_privateclients', 'maxclients'):
+            if key in info:
+                try:
+                    max_clients = int(info[key])
+                    break
+                except ValueError:
+                    continue
+        return {'total': total, 'bots': bots, 'real': real, 'max_clients': max_clients, 'info': info, 'reliable': True}
+    (loose_humans, loose_bots) = _loose_scan_player_lines(text, bot_names=bot_names)
+    if loose_humans > 0 or loose_bots > 0:
+        return {'total': loose_humans + loose_bots, 'bots': loose_bots, 'real': loose_humans, 'max_clients': 0, 'info': info, 'reliable': True}
+    clients_total = _infostring_client_count(info)
+    bot_count = _infostring_bot_count(info)
+    if clients_total is not None and bot_count is not None:
+        real = max(clients_total - bot_count, 0)
+        return {'total': clients_total, 'bots': bot_count, 'real': real, 'max_clients': 0, 'info': info, 'reliable': True}
+    return None
+
+def fetch_getstatus_raw(host, port, timeout=5.0, public_ip=None):
+    payloads = (b'\xff\xff\xff\xffgetstatus\n', b'\xff\xff\xff\xffgetstatus', b'\xff\xff\xff\xffgetinfo\n')
+    for target in _player_query_hosts(host, public_ip):
+        for payload in payloads:
+            text = _udp_oob_collect(target, port, payload, timeout=timeout)
+            if text:
+                return text
+    return ''
+
+def query_server_getstatus(host, port, timeout=5.0, bot_names=None, public_ip=None):
+    payloads = (b'\xff\xff\xff\xffgetstatus\n', b'\xff\xff\xff\xffgetstatus', b'\xff\xff\xff\xffgetinfo\n')
+    for target in _player_query_hosts(host, public_ip):
+        for payload in payloads:
+            text = _udp_oob_collect(target, port, payload, timeout=timeout)
+            result = _parse_getstatus_text(text, bot_names=bot_names)
+            if result is not None:
+                return result
     return None
 
 def _infostring_bot_count(info):
@@ -181,66 +299,6 @@ def _infostring_client_count(info):
             continue
     return None
 
-def _parse_getstatus_text(text, bot_names=None):
-    if not text:
-        return None
-    body = text
-    found = False
-    for marker in ('statusResponse', 'infoResponse'):
-        idx = text.find(marker)
-        if idx != -1:
-            body = text[idx + len(marker):].lstrip('\r\n')
-            found = True
-            break
-    if not found and ('\\hostname\\' in text or '\\gamename\\' in text):
-        body = text.lstrip('\r\n')
-    rows = body.split('\n')
-    infostring = rows[0] if rows else ''
-    info = _parse_infostring(infostring)
-    if bot_names is None:
-        bot_names = _bot_name_cache()
-    clients = []
-    for row in rows[1:]:
-        client = _parse_getstatus_player_line(row)
-        if client is not None:
-            clients.append(client)
-    if clients:
-        real = sum((1 for client in clients if not is_bot_client(client, bot_names)))
-        total = len(clients)
-        bots = total - real
-        max_clients = 0
-        for key in ('sv_maxclients', 'sv_privateclients', 'maxclients'):
-            if key in info:
-                try:
-                    max_clients = int(info[key])
-                    break
-                except ValueError:
-                    continue
-        return {'total': total, 'bots': bots, 'real': real, 'max_clients': max_clients, 'info': info, 'reliable': True}
-    clients_total = None
-    for clients_key in ('clients', 'numplayers'):
-        if clients_key not in info:
-            continue
-        try:
-            clients_total = int(info[clients_key])
-            break
-        except ValueError:
-            continue
-    if clients_total is None:
-        return None
-    bot_count = _infostring_bot_count(info)
-    if bot_count is None:
-        return None
-    real = max(clients_total - bot_count, 0)
-    return {'total': clients_total, 'bots': bot_count, 'real': real, 'max_clients': 0, 'info': info, 'reliable': True}
-
-def query_server_getstatus(host, port, timeout=3.0, bot_names=None):
-    for payload in (b'\xff\xff\xff\xffgetstatus\n', b'\xff\xff\xff\xffgetstatus'):
-        text = _udp_oob_collect(host, port, payload, timeout=timeout)
-        result = _parse_getstatus_text(text, bot_names=bot_names)
-        if result is not None:
-            return result
-    return None
 PLUTONIUM_API_URL = 'https://plutonium.pw/api/servers'
 _PLUTO_CACHE = {'ts': 0.0, 'data': None}
 _PLUTO_CACHE_TTL = 10
@@ -441,14 +499,26 @@ def parse_status_player_count(status_text):
 
 def _stdout_session_lines(lines, port=None):
     session_start = 0
-    port_token = f':{int(port)}' if port is not None else ''
+    port_text = str(int(port)) if port is not None else ''
     for (index, line) in enumerate(lines):
-        if 'bound socket to' not in line:
+        lower = line.lower()
+        if 'bound socket to' in lower:
+            if port_text and port_text not in line:
+                continue
+            session_start = index
             continue
-        if port_token and port_token not in line:
-            continue
-        session_start = index
+        if any((token in lower for token in ('heartbeat successful', 'server initialization', 'started server on port'))):
+            session_start = index
+    if session_start == 0 and len(lines) > 1200:
+        return lines[-1200:]
     return lines[session_start:]
+
+def _disconnect_name(line):
+    for pattern in DISCONNECT_PATTERNS:
+        match = pattern.search(line)
+        if match:
+            return _strip_player_name(match.group(1)).lower()
+    return ''
 
 def estimate_players_from_stdout(log_path, port=None, max_bytes=524288, bot_names=None):
     path = Path(log_path) if log_path else None
@@ -463,18 +533,37 @@ def estimate_players_from_stdout(log_path, port=None, max_bytes=524288, bot_name
     except OSError:
         return 0
     lines = _stdout_session_lines(data.splitlines(), port)
-    online = set()
+    authed_online = {}
     for line in lines:
+        auth = AUTH_RE.search(line)
+        if auth:
+            pid = auth.group(1)
+            if pid.isdigit() and int(pid) > 0:
+                authed_online[pid] = ''
+            continue
         connect = CONNECT_RE.search(line)
         if connect:
             name = _strip_player_name(connect.group(1)).lower()
-            if name and name not in bot_names:
-                online.add(name)
+            if not name or name in bot_names:
+                continue
+            assigned = False
+            for pid in list(authed_online.keys()):
+                if authed_online[pid] == '':
+                    authed_online[pid] = name
+                    assigned = True
+                    break
+            if not assigned:
+                authed_online[f'name:{name}'] = name
             continue
-        disconnect = DISCONNECT_RE.search(line)
-        if disconnect:
-            online.discard(_strip_player_name(disconnect.group(1)).lower())
-    return len(online)
+        dropped = _disconnect_name(line)
+        if dropped:
+            for pid in list(authed_online.keys()):
+                if authed_online.get(pid) == dropped:
+                    del authed_online[pid]
+                    break
+            else:
+                authed_online.pop(f'name:{dropped}', None)
+    return sum((1 for value in authed_online.values() if value))
 
 def resolve_install_dir(config):
     configured = (config.get('general_config', {}) or {}).get('install_dir', '')
@@ -509,20 +598,47 @@ def estimate_humans_from_logs(config, server, port=None, bot_names=None):
     return total
 
 def api_human_player_count(server, config, public_ip=None):
-    entry = match_plutonium_server(server, public_ip=public_ip)
+    api_data = fetch_plutonium_servers(force=True)
+    entry = match_plutonium_server(server, api_data=api_data, public_ip=public_ip)
     if not entry:
         return None
     count = plutonium_api_real_count(entry)
     return count if count >= 0 else None
 
-def _pick_human_count(candidates, max_clients=18):
-    values = sorted({int(value) for value in candidates if value is not None and int(value) >= 0})
-    if not values:
-        return 0
-    positive = [value for value in values if value > 0]
-    if positive:
-        return min(min(positive), max_clients)
-    return 0
+def _human_player_cap(config, server, max_clients):
+    cap = int(max_clients)
+    if server and config and server_uses_bot_warfare(config, server.get('id')):
+        fill = int(config.get('bot_warfare', {}).get('manage_fill', 12))
+        cap = max(cap - fill, 1)
+    return cap
+
+def ss_udp_peer_count(port, public_ip=None, max_clients=18):
+    skip = {'127.0.0.1', '0.0.0.0'}
+    if public_ip:
+        skip.add(public_ip)
+    ips = []
+    try:
+        result = subprocess.run(['ss', '-H', '-u', '-n', f'sport = :{int(port)}'], capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    for line in (result.stdout or '').splitlines():
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        peer = parts[4]
+        if ':' not in peer:
+            continue
+        ip = peer.rsplit(':', 1)[0].strip('[]')
+        if not re.fullmatch('\\d{1,3}(?:\\.\\d{1,3}){3}', ip):
+            continue
+        if ip in skip or ip in ips:
+            continue
+        ips.append(ip)
+    if not ips:
+        return None
+    return min(len(ips), max_clients)
 
 def _player_query_hosts(rcon_host, public_ip=None):
     hosts = []
@@ -536,24 +652,23 @@ def conntrack_real_player_count(port, public_ip=None, max_clients=18):
     if public_ip:
         skip.add(public_ip)
     ips = []
-    for ip in resolve_ips_from_conntrack(port):
+    for ip in resolve_ips_from_conntrack(port, public_ip=public_ip):
         if ip in skip:
             continue
         if ip not in ips:
             ips.append(ip)
-    if not ips:
-        return None
-    return min(len(ips), max_clients)
+    if ips:
+        return min(len(ips), max_clients)
+    return ss_udp_peer_count(port, public_ip=public_ip, max_clients=max_clients)
 
 def _server_stdout_log(config, server_id):
     server = {'id': server_id}
     return resolve_server_log_paths(config, server)[0]
 
 def getstatus_player_count(host, port, public_ip=None, max_clients=18, bot_names=None):
-    for target in _player_query_hosts(host, public_ip):
-        info = query_server_getstatus(target, port, bot_names=bot_names)
-        if info is not None and info.get('reliable'):
-            return min(int(info.get('real', 0)), max_clients)
+    info = query_server_getstatus(host, port, bot_names=bot_names, public_ip=public_ip)
+    if info is not None and info.get('reliable'):
+        return min(int(info.get('real', 0)), max_clients)
     return None
 
 def rcon_real_player_count(host, port, password, max_clients=18, public_ip=None, bot_names=None):
@@ -576,24 +691,24 @@ def get_server_player_count(host, port, password, stdout_log=None, max_clients=1
                 server = item
                 break
     bot_names = _bot_name_cache() if server_id and config and server_uses_bot_warfare(config, server_id) else set()
-    candidates = []
-    gs_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=max_clients, bot_names=bot_names)
+    human_cap = _human_player_cap(config, server, max_clients) if config else max_clients
+    gs_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=human_cap, bot_names=bot_names)
     if gs_count is not None:
-        candidates.append(gs_count)
+        return gs_count
+    net_count = conntrack_real_player_count(port, public_ip=public_ip, max_clients=human_cap)
+    if net_count is not None:
+        return net_count
     api_count = api_human_player_count(server, config, public_ip=public_ip) if config else None
-    if api_count is not None:
-        candidates.append(api_count)
-    ct_count = conntrack_real_player_count(port, public_ip=public_ip, max_clients=max_clients)
-    if ct_count is not None:
-        candidates.append(ct_count)
+    if api_count is not None and api_count <= human_cap:
+        return api_count
     if config and server_id:
         log_count = estimate_humans_from_logs(config, server, port=port, bot_names=bot_names)
-        if log_count > 0:
-            candidates.append(log_count)
-    rcon_count = rcon_real_player_count(host, port, password, max_clients=max_clients, public_ip=public_ip, bot_names=bot_names)
+        if 0 < log_count <= human_cap:
+            return log_count
+    rcon_count = rcon_real_player_count(host, port, password, max_clients=human_cap, public_ip=public_ip, bot_names=bot_names)
     if rcon_count is not None:
-        candidates.append(rcon_count)
-    return _pick_human_count(candidates, max_clients=max_clients)
+        return rcon_count
+    return 0
 
 def probe_server_runtime(host, port, password, public_ip=None, server_id=None, config=None):
     rcon_count = rcon_real_player_count(host, port, password, public_ip=public_ip)
@@ -694,17 +809,20 @@ def parse_status_clients(status_text):
         clients.append({'client_num': client_num, 'guid': guid, 'name': name, 'ip': ip, 'ping': ping, 'address': address})
     return clients
 
-def resolve_ips_from_conntrack(port):
+def resolve_ips_from_conntrack(port, public_ip=None):
     ips = []
-    commands = (['conntrack', '-L', '-p', 'udp', '--dport', str(port)], ['conntrack', '-L', '-p', 'udp', '--sport', str(port)])
+    port_n = int(port)
+    commands = (['conntrack', '-L', '-p', 'udp', '--dport', str(port_n)],)
     for cmd in commands:
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
         except (OSError, subprocess.SubprocessError, ValueError):
             continue
         if result.returncode != 0:
             continue
         for line in (result.stdout or '').splitlines():
+            if public_ip and f'dst={public_ip}' not in line:
+                continue
             match = re.search('src=(\\d+\\.\\d+\\.\\d+\\.\\d+)', line)
             if not match:
                 continue
@@ -716,10 +834,12 @@ def resolve_ips_from_conntrack(port):
     proc_path = Path('/proc/net/nf_conntrack')
     if not proc_path.is_file():
         return ips
-    port_token = f'dport={int(port)}'
+    port_token = f'dport={port_n}'
     try:
         for line in proc_path.read_text(encoding='utf-8', errors='ignore').splitlines():
             if port_token not in line:
+                continue
+            if public_ip and f'dst={public_ip}' not in line:
                 continue
             match = re.search('src=(\\d+\\.\\d+\\.\\d+\\.\\d+)', line)
             if match:
@@ -1078,6 +1198,7 @@ def lookup_player(conn, query):
     return rows
 CONNECT_RE = re.compile("client\\s+'([^']+)'\\s+connected", re.I)
 DISCONNECT_RE = re.compile("client\\s+'([^']+)'\\s+disconnected", re.I)
+DISCONNECT_PATTERNS = (DISCONNECT_RE, re.compile("client\\s+'([^']+)'\\s+dropped", re.I), re.compile('client\\s+([^\\s]+)\\s+disconnected', re.I), re.compile("lost connection to client\\s+'([^']+)'", re.I))
 AUTH_RE = re.compile('User with id\\s+(\\d+)\\s+successfully authenticated', re.I)
 LET_PLAYER_RE = re.compile('Letting player with userid\\s+(\\d+)', re.I)
 CLIENT_ENDPOINT_RE = re.compile("'(\\d{1,3}(?:\\.\\d{1,3}){3}):\\d+'")
