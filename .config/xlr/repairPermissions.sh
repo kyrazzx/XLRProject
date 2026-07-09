@@ -56,7 +56,9 @@ xlr_repair_permissions() {
         "$workdir/Resources" \
         "$workdir/backups" \
         "$workdir/logs" \
-        "$workdir/IW4MAdmin"
+        "$workdir/IW4MAdmin" \
+        "$workdir/.build" \
+        "$workdir/.tools"
     do
         xlr_chown_path "$run_user" "$run_group" "$path"
     done

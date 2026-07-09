@@ -280,7 +280,7 @@ Deploy or refresh **without reinstalling**:
 # Enable in config if needed:
 jq '.resxt_scripts.chat_commands.enabled = true | .resxt_scripts.mapvote.enabled = true' Plutonium/server_config.json > /tmp/cfg.json && mv /tmp/cfg.json Plutonium/server_config.json
 
-sudo bash .config/xlr/setupResxtScripts.sh --install
+bash .config/xlr/setupResxtScripts.sh --install
 sudo bash Plutonium/XLRManager.sh restart all
 ```
 

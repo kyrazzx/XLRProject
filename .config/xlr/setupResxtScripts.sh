@@ -13,6 +13,55 @@ fi
 
 RESXT_REPO_ZIP="https://github.com/Resxt/Plutonium-T6-Scripts/archive/refs/heads/main.zip"
 
+xlr_resxt_run_user() {
+    local workdir="$1"
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        printf '%s\n' "$SUDO_USER"
+        return 0
+    fi
+    local owner
+    owner=$(stat -c '%U' "$workdir" 2>/dev/null || true)
+    if [ -n "$owner" ] && [ "$owner" != "root" ]; then
+        printf '%s\n' "$owner"
+        return 0
+    fi
+    id -un
+}
+
+xlr_resxt_prepare_build_dir() {
+    local workdir="$1"
+    local build_dir="$workdir/.build/resxt"
+    local run_user run_group
+
+    run_user=$(xlr_resxt_run_user "$workdir")
+    run_group=$(id -gn "$run_user" 2>/dev/null || echo "$run_user")
+
+    if [ -d "$workdir/.build" ] && [ ! -w "$workdir/.build" ]; then
+        if [ "$(id -u)" -eq 0 ]; then
+            chown -R "$run_user:$run_group" "$workdir/.build" 2>/dev/null || true
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo chown -R "$run_user:$run_group" "$workdir/.build" 2>/dev/null || \
+                sudo rm -rf "$workdir/.build" 2>/dev/null || true
+        fi
+    fi
+
+    mkdir -p "$build_dir"
+    if [ "$(id -u)" -eq 0 ] && [ "$run_user" != "root" ]; then
+        chown -R "$run_user:$run_group" "$build_dir" 2>/dev/null || true
+    fi
+}
+
+xlr_resxt_rm_rf() {
+    local path="$1"
+    [ -e "$path" ] || return 0
+    rm -rf "$path" 2>/dev/null && return 0
+    if command -v sudo >/dev/null 2>&1; then
+        sudo rm -rf "$path" 2>/dev/null && return 0
+    fi
+    echo "[XLR] ERROR: cannot remove $path — run: sudo rm -rf $path" >&2
+    return 1
+}
+
 xlr_resxt_enabled() {
     local feature="$1"
     local config_file="${2:-$WORKDIR/Plutonium/server_config.json}"
@@ -108,8 +157,9 @@ xlr_fetch_resxt_sources() {
     local zip_file="$build_dir/resxt.zip"
     local extract_dir="$build_dir/extract"
 
-    mkdir -p "$build_dir"
-    rm -rf "$extract_dir"
+    xlr_resxt_prepare_build_dir "$workdir" || return 1
+    xlr_resxt_rm_rf "$extract_dir" || return 1
+    mkdir -p "$extract_dir"
 
     if ! command -v curl >/dev/null 2>&1; then
         echo "[XLR] ERROR: curl is required" >&2
@@ -157,7 +207,7 @@ xlr_stage_chat_commands() {
     owner_id=$(jq -r '.customization.owner.plutonium_id // "0"' "$config_file")
     ports_csv=$(xlr_build_server_ports_array "$config_file" "chat_commands")
 
-    rm -rf "$t6_root"
+    rm -rf "$t6_root" 2>/dev/null || xlr_resxt_rm_rf "$t6_root" || return 1
     mkdir -p "$stage_dir/mp"
 
     cp -f "$src_dir/chat_commands.gsc" "$stage_dir/" || return 1
@@ -185,7 +235,7 @@ xlr_stage_mapvote() {
         return 1
     fi
 
-    rm -rf "$t6_root"
+    rm -rf "$t6_root" 2>/dev/null || xlr_resxt_rm_rf "$t6_root" || return 1
     mkdir -p "$stage_dir/mp"
     cp -f "$root_dir/mapvote/mapvote.gsc" "$stage_dir/" || return 1
     cp -f "$root_dir/mapvote/mapvote_mp_extend.gsc" "$stage_dir/mp/" || return 1
@@ -219,8 +269,9 @@ xlr_compile_resxt_tree() {
     done < <(find "$scripts_src" -name '*.gsc' -type f -print0 | sort -z)
 
     compile_tree="$workdir/.build/resxt/compile-tree"
-    rm -rf "$compile_tree"
-    cp -a "$scripts_src" "$compile_tree/scripts"
+    xlr_resxt_rm_rf "$compile_tree" || return 1
+    mkdir -p "$compile_tree/scripts"
+    cp -a "$scripts_src/." "$compile_tree/scripts/"
 
     for compile_rel in "${ordered[@]}"; do
         src="$compile_tree/scripts/$compile_rel"
@@ -378,6 +429,11 @@ setupResxtScripts() {
     local chat map root_dir=""
 
     [ -f "$config_file" ] || return 1
+    xlr_resxt_prepare_build_dir "$workdir" || return 1
+
+    if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        echo "[XLR] WARN: run as $SUDO_USER when possible — fixing .build ownership" >&2
+    fi
     chat=$(jq -r '.resxt_scripts.chat_commands.enabled // false' "$config_file")
     map=$(jq -r '.resxt_scripts.mapvote.enabled // false' "$config_file")
 
