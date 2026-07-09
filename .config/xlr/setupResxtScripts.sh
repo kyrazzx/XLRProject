@@ -80,20 +80,7 @@ xlr_build_server_ports_array() {
         | select(.enabled == true)
         | select(.id as $id | ($ids | length) == 0 or ($ids | index($id)))
         | .port
-    ' "$config_file" | awk '{printf "%s, ", $0}' | sed 's/, $//'
-}
-
-xlr_patch_resxt_command_gsc() {
-    local file="$1"
-    python3 - "$file" <<'PY'
-import sys
-
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-if "init()\n{" not in text and "\ninit()\r\n{" not in text:
-    text += "\ninit()\n{\n\tInit();\n}\n"
-open(path, "w", encoding="utf-8").write(text)
-PY
+    ' "$config_file" | awk '{printf "\"%s\", ", $0}' | sed 's/, $//'
 }
 
 xlr_purge_legacy_resxt_chat() {
@@ -101,9 +88,7 @@ xlr_purge_legacy_resxt_chat() {
     local legacy
 
     for legacy in \
-        "$dest_scripts"/chat_command_*.gsc \
         "$dest_scripts"/z_chat_command_*.gsc \
-        "$dest_scripts/mp/chat_command_suicide.gsc" \
         "$dest_scripts/mp/z_chat_command_suicide.gsc"
     do
         [ -e "$legacy" ] || continue
@@ -137,35 +122,23 @@ text = open(path, encoding="utf-8").read()
 
 text = re.sub(
     r'level\.chat_commands\["ports"\] = array\("4976", "4977"\);',
-    (
-        f'level.chat_commands["ports"] = array({ports});\n'
-        f'\tlevel.commands = [];\n'
-        f'\tforeach (xlr_cc_port in level.chat_commands["ports"])\n'
-        f'\t{{\n'
-        f'\t\tlevel.commands[xlr_cc_port] = [];\n'
-        f'\t\tlevel.commands[xlr_cc_port + ""] = level.commands[xlr_cc_port];\n'
-        f'\t}}'
-    ),
+    f'level.chat_commands["ports"] = array({ports});',
     text,
     count=1,
 )
 
 text = text.replace(
-    "if (serverPort == currentPort)",
-    'if (serverPort == currentPort || (serverPort + "") == (currentPort + ""))',
+    "\tplayer thread TellPlayer(InsufficientPermissionError(0), 1);\n\t\tcontinue; // stop",
+    "\tcontinue; // xlr: silent for non-owner\n",
     1,
 )
-
-if "init()\n{" not in text and "init()\r\n{" not in text:
-    main_block = "Main()\n{\n\tInitChatCommands();\n}"
-    if main_block in text:
-        text = text.replace(
-            main_block,
-            main_block + "\n\ninit()\n{\n\tInitChatCommands();\n}",
-            1,
-        )
-    else:
-        text += "\ninit()\n{\n\tInitChatCommands();\n}\n"
+if "xlr: silent for non-owner" not in text:
+    text = re.sub(
+        r'player thread TellPlayer\(InsufficientPermissionError\(0\), 1\);\s*continue; // stop',
+        "continue; // xlr: silent for non-owner",
+        text,
+        count=1,
+    )
 
 old = (
     '\t\tif (IsDefined(isCommand) && isCommand)\n'
@@ -278,18 +251,12 @@ xlr_stage_chat_commands() {
     cp -f "$src_dir/chat_commands.gsc" "$stage_dir/" || return 1
     for file in "$src_dir"/chat_command_*.gsc; do
         [ -f "$file" ] || continue
-        local dest_name
         case "$(basename "$file")" in
-            *"unlimited_ammo "*) dest_name="z_chat_command_unlimited_ammo.gsc" ;;
-            *) dest_name="z_$(basename "$file")" ;;
+            *"unlimited_ammo "*) cp -f "$file" "$stage_dir/chat_command_unlimited_ammo.gsc" || return 1 ;;
+            *) cp -f "$file" "$stage_dir/" || return 1 ;;
         esac
-        cp -f "$file" "$stage_dir/$dest_name" || return 1
-        xlr_patch_resxt_command_gsc "$stage_dir/$dest_name" || return 1
     done
-    if [ -f "$src_dir/mp/chat_command_suicide.gsc" ]; then
-        cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/z_chat_command_suicide.gsc" || return 1
-        xlr_patch_resxt_command_gsc "$stage_dir/mp/z_chat_command_suicide.gsc" || return 1
-    fi
+    [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/" || true
 
     xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id" || return 1
     printf '%s' "$t6_root"
@@ -329,10 +296,15 @@ xlr_compile_resxt_tree() {
     [ -f "$scripts_src/chat_commands.gsc" ] && ordered+=("chat_commands.gsc")
     while IFS= read -r -d '' src; do
         ordered+=("${src#$scripts_src/}")
-    done < <(find "$scripts_src" -maxdepth 1 -name 'z_chat_command*.gsc' -type f -print0 | sort -z)
+    done < <(find "$scripts_src" -maxdepth 1 -name 'chat_command*.gsc' -type f -print0 | sort -z)
     while IFS= read -r -d '' src; do
-        ordered+=("${src#$scripts_src/}")
-    done < <(find "$scripts_src/mp" -maxdepth 1 -name 'z_chat_command*.gsc' -type f -print0 2>/dev/null | sort -z)
+        rel="${src#$scripts_src/}"
+        [ "$rel" = "chat_commands.gsc" ] && continue
+        case "$rel" in
+            chat_command*) continue ;;
+        esac
+        ordered+=("$rel")
+    done < <(find "$scripts_src" -name '*.gsc' -type f -print0 | sort -z)
 
     compile_tree="$workdir/.build/resxt/compile-tree"
     xlr_resxt_rm_rf "$compile_tree" || return 1
@@ -418,6 +390,10 @@ xlr_apply_chat_command_dvars() {
         xlr_set_cfg_dvar "$cfg_path" "cc_permission_default" "0"
         xlr_set_cfg_dvar "$cfg_path" "cc_permission_max" "4"
         xlr_set_cfg_dvar "$cfg_path" "cc_permission_4" "$owner_name"
+        xlr_set_cfg_dvar "$cfg_path" "cc_permission_3" ""
+        xlr_set_cfg_dvar "$cfg_path" "cc_permission_2" ""
+        xlr_set_cfg_dvar "$cfg_path" "cc_permission_1" ""
+        xlr_set_cfg_dvar "$cfg_path" "cc_permission_0" ""
         echo "[XLR] Chat commands dvars applied to $cfg_file (owner=$owner_name, prefix=$prefix)"
     done < <(jq -r '.resxt_scripts.chat_commands.server_ids[]?' "$config_file")
 }
