@@ -46,6 +46,7 @@ xlr_sync_config_paths() {
         .general_config.game_path_mp = $mp |
         .general_config.game_path_zm = $zm |
         .general_config.backup_dir = ($w + "/backups") |
+        .general_config.public_ip = (.general_config.public_ip // "") |
         .iw4madmin_config.install_dir = ($w + "/IW4MAdmin") |
         .iw4madmin_config.manual_log_path = ($pd + "/storage/t6/logs") |
         .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))

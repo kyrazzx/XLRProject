@@ -187,7 +187,6 @@ xlr_monitor_once() {
             local wrapper_pid wrapper_uptime
             if wrapper_pid=$(xlr_get_wrapper_pid "$config_file" "$server_id"); then
                 wrapper_uptime=$(xlr_process_uptime_seconds "$wrapper_pid")
-                # Wrapper can stay alive while game crashes in a loop; recover if this persists.
                 if [ "$wrapper_uptime" -ge 45 ]; then
                     xlr_write_log "$monitoring_log_dir" "$server_id" "Wrapper alive but no game process for ${wrapper_uptime}s, forcing full restart"
                     xlr_send_discord_webhook "$webhook_url" "XLR: $server_id wrapper alive but game is down, forcing restart..."

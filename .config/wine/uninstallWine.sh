@@ -1,20 +1,12 @@
 #!/bin/bash
 
-# File: uninstallWine.sh
-# Description: Script to uninstall Wine for the Plutonium Call of Duty: Black Ops II Server
-# Version: 3.1.1
-# Author: Sterbweise
-# Last Updated: 07/12/2024
 
-# Import global configurations
 if [ "$1" = "--uninstall" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
-# Function to uninstall Wine
 uninstallWine() {
     {
-        # Check if Wine is installed before attempting to remove
         if dpkg -l | grep -q winehq-stable; then
             apt-get remove --purge winehq-stable -y
         fi
@@ -24,7 +16,6 @@ uninstallWine() {
         rm -f /etc/apt/trusted.gpg.d/winehq.asc
         rm -f /etc/apt/keyrings/winehq-archive.key
 
-        # Remove Wine environment variables from .bashrc
         sed -i '/WINEPREFIX/d' ~/.bashrc
         sed -i '/WINEDEBUG/d' ~/.bashrc
         sed -i '/WINEARCH/d' ~/.bashrc
@@ -32,17 +23,14 @@ uninstallWine() {
         sed -i '/WINEFSYNC/d' ~/.bashrc
         sed -i '/WINEDLLOVERRIDES/d' ~/.bashrc
 
-        # Remove Wine prefix directory if it exists
         if [ -d "$HOME/.wine" ]; then
             rm -rf "$HOME/.wine"
         fi
 
-        # Update package list
         apt-get update
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "uninstallWine")"
     
-    # Verify uninstallation
     if ! dpkg -l | grep -q winehq-stable; then
         printf "${COLORS[GREEN]}Success:${COLORS[RESET]} Wine has been uninstalled.\n"
     else
@@ -52,7 +40,6 @@ uninstallWine() {
     fi
 }
 
-# Run the uninstallation function if --uninstall is provided
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--uninstall" ]; then

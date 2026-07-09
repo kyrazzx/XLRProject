@@ -1,11 +1,4 @@
 #!/bin/bash
-#
-# analyze_attack.sh - Capture and characterize traffic hitting the XLR game
-# ports, to tell apart spoofed floods vs proxy/botnet vs a few repeat IPs.
-#
-# Usage:  sudo bash Resources/xlr/analyze_attack.sh [duration_seconds]
-# Default duration: 30s. Run it WHILE the lag/attack is happening.
-#
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,9 +15,6 @@ for bin in tcpdump jq; do
     command -v "$bin" >/dev/null 2>&1 || { echo "Missing '$bin' (apt install $bin)"; exit 1; }
 done
 
-# Safety caps to keep the capture cheap even under a heavy flood:
-#  -s 96  : headers only (we only need src IP / TTL / length / frag flags)
-#  -c CAP : stop after CAP packets no matter what (bounds CPU + disk I/O)
 SNAPLEN=96
 MAX_PACKETS="${2:-200000}"
 

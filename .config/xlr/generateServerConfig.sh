@@ -82,7 +82,6 @@ generateServerConfig() {
         xlr_patch_dedicated_cfg "$mp_main/dedicated_gungame.cfg" "XLR | Gun Game EU" \
             "execgts gun.cfg $map_pool" "games_mp_gungame.log" "$rcon"
 
-        # XLRManager launches from Plutonium/ and runs +exec dedicated_*.cfg there.
         cp -f "$mp_main/dedicated_ffa.cfg" "$plutonium_dir/dedicated_ffa.cfg"
         cp -f "$mp_main/dedicated_tdm.cfg" "$plutonium_dir/dedicated_tdm.cfg"
         cp -f "$mp_main/dedicated_gungame.cfg" "$plutonium_dir/dedicated_gungame.cfg"

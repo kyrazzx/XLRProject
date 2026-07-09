@@ -90,7 +90,6 @@ setupDdosProtection() {
 
     local fragment_rule=""
     if [ "$drop_fragments" = "true" ]; then
-        # Drop non-first IPv4 fragments (compatible with all nft versions on our VPS)
         fragment_rule="        udp dport { $nft_ports } ip frag-off != 0 drop"
     fi
 

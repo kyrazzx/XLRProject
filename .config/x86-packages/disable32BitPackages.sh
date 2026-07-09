@@ -1,17 +1,10 @@
 #!/bin/bash
 
-# File: disable32BitPackages.sh
-# Description: Script to disable 32-bit architecture support
-# Version: 3.1.1
-# Author: Sterbweise
-# Last Updated: 07/12/2024
 
-# Import global configurations
 if [ "$1" = "--disable" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
-# Function to disable 32-bit architecture support
 disable32BitPackages() {
     {
         if dpkg --print-foreign-architectures | grep -q i386; then
@@ -21,7 +14,6 @@ disable32BitPackages() {
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "bit")"
     
-    # Verify removal
     if dpkg --print-foreign-architectures | grep -q i386; then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} 32-bit package deactivation failed.\n"
         printf "Attempting deactivation again...\n"
@@ -38,7 +30,6 @@ disable32BitPackages() {
     fi
 }
 
-# Run the disable function if --disable is provided
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--disable" ]; then

@@ -1,21 +1,13 @@
 #!/bin/bash
 
-# testsValidation.sh - Comprehensive Test Suite for T6 Server Installation and Management
-# Version: 2.1.0
-# Author: Sterbweise
-# Last Updated: 2024-01-10
 
-# Strict mode for better error handling
 set -euo pipefail
 
-# Determine the script's directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 
-# Import colors from utility/colors.sh
 source "$(dirname "${BASH_SOURCE[0]}")/.config/utility/colors.sh"
 
-# Global variables for test results
 declare -A TEST_RESULTS
 declare -A SYSTEM_INFO
 TOTAL_TESTS=0
@@ -23,7 +15,6 @@ PASSED_TESTS=0
 FAILED_TESTS=0
 START_TIME=$(date +%s)
 
-# Logging function
 log() {
     local level="$1"
     local message="$2"
@@ -52,7 +43,6 @@ log() {
     esac
 }
 
-# Ensure script is run with sudo
 check_sudo() {
     if [[ $EUID -ne 0 ]]; then
         log "ERROR" "This script must be run with sudo privileges"
@@ -60,7 +50,6 @@ check_sudo() {
     fi
 }
 
-# Function to collect system information
 collect_system_info() {
     log "INFO" "Collecting system information..."   
     {
@@ -68,46 +57,37 @@ collect_system_info() {
         apt install -y procps jq
     } > /dev/null 2>&1
     
-    # CPU Information
     SYSTEM_INFO["cpu_model"]=$(lscpu | grep "Model name" | cut -d: -f2 | xargs)
     SYSTEM_INFO["cpu_cores"]=$(lscpu | grep "^CPU(s):" | cut -d: -f2 | xargs)
     SYSTEM_INFO["cpu_threads"]=$(lscpu | grep "Thread(s) per core" | cut -d: -f2 | xargs)
     
-    # Memory Information
     SYSTEM_INFO["total_memory"]=$(free -h | awk '/^Mem:/ {print $2}')
     SYSTEM_INFO["available_memory"]=$(free -h | awk '/^Mem:/ {print $7}')
     
-    # Disk Information
     SYSTEM_INFO["disk_space"]=$(df -h / | awk 'NR==2 {print $4}')
     
-    # OS Information
     SYSTEM_INFO["os_version"]=$(grep "PRETTY_NAME" /etc/os-release | cut -d'"' -f2)
     SYSTEM_INFO["kernel_version"]=$(uname -r)
 }
 
-# Utility function to run a script with error handling
 run_script() {
     local script_path="${1:-}"
     local action="${2:---install}"
     
-    # Validate script path
     if [[ -z "$script_path" ]]; then
         log "ERROR" "No script path provided to run_script()"
         return 1
     fi
     
-    # Add explicit logging and path verification
     log "DEBUG" "Attempting to run script: $script_path"
     log "DEBUG" "Full script path: $(realpath "$script_path")"
     log "DEBUG" "Action: $action"
     
-    # Check if script exists
     if [ ! -f "$script_path" ]; then
         log "ERROR" "Script does not exist: $script_path"
         return 1
     fi
     
-    # Ensure script is executable
     if [[ ! -x "$script_path" ]]; then
         log "WARN" "Script not executable. Attempting to add execute permissions."
         chmod +x "$script_path" || {
@@ -116,15 +96,12 @@ run_script() {
         }
     fi
     
-    # Verbose logging of script execution
     log "INFO" "Running script: $script_path with action: $action"
     
-    # Capture both stdout and stderr, show full output
     local output
     output=$("$script_path" "$action" > /dev/null 2>&1)
     local exit_code=$?
     
-    # Log the full output for debugging
     log "DEBUG" "Script output: $output"
     
     if [ $exit_code -eq 0 ]; then
@@ -137,7 +114,6 @@ run_script() {
     fi
 }
 
-# Test system update functionality
 testSystemUpdate() {
     log "INFO" "Testing system update process"
     
@@ -153,13 +129,11 @@ testSystemUpdate() {
     return 0
 }
 
-# Test dependencies installation
 testDependenciesInstallation() {
     log "INFO" "Testing dependencies installation"
     
     local script_path="$ROOT_DIR/.config/dependencies/installDependencies.sh"
     
-    # Use --install flag explicitly
     if ! run_script "$script_path" "--install"; then
         log "ERROR" "Failed to run dependencies installation script"
         ((FAILED_TESTS++))
@@ -191,7 +165,6 @@ testDependenciesInstallation() {
     ((TOTAL_TESTS++))
 }
 
-# Test firewall installation and configuration
 testFirewallInstallation() {
     log "INFO" "Testing firewall installation"
     
@@ -217,7 +190,6 @@ testFirewallInstallation() {
     ((TOTAL_TESTS++))
 }
 
-# Test 32-bit packages enablement
 test32BitPackagesEnablement() {
     log "INFO" "Testing 32-bit package support"
     
@@ -226,7 +198,6 @@ test32BitPackagesEnablement() {
             log "SUCCESS" "32-bit package support is enabled"
             ((PASSED_TESTS++))
         else
-            # Attempt manual 32-bit architecture enablement
             dpkg --add-architecture i386
             apt-get update
             if dpkg --print-foreign-architectures | grep -q "i386"; then
@@ -244,7 +215,6 @@ test32BitPackagesEnablement() {
     ((TOTAL_TESTS++))
 }
 
-# Test Wine installation
 testWineInstallation() {
     log "INFO" "Testing Wine installation"
     
@@ -254,7 +224,6 @@ testWineInstallation() {
             log "SUCCESS" "Wine is installed (Version: $wine_version)"
             ((PASSED_TESTS++))
         else
-            # Attempt manual Wine installation
             apt-get install -y wine
             if command -v wine &> /dev/null; then
                 local wine_version=$(wine --version)
@@ -272,7 +241,6 @@ testWineInstallation() {
     ((TOTAL_TESTS++))
 }
 
-# Test .NET installation
 testDotnetInstallation() {
     log "INFO" "Testing .NET installation"
     
@@ -281,7 +249,6 @@ testDotnetInstallation() {
             log "SUCCESS" ".NET Framework is installed"
             ((PASSED_TESTS++))
         else
-            # Attempt manual .NET installation
             wget https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
             dpkg -i packages-microsoft-prod.deb
             apt-get update
@@ -302,17 +269,12 @@ testDotnetInstallation() {
     ((TOTAL_TESTS++))
 }
 
-# Test game binaries installation
 testGameBinariesInstallation() {
     log "INFO" "Testing game binaries installation"
     
     if run_script "$ROOT_DIR/.config/binaries/installGameBinaries.sh" "--install"; then
         local install_dir="/opt/T6Server"  # Fallback default directory
         
-        # # Check if server_config.json exists, if not use default
-        # if [ -f "$ROOT_DIR/server_config.json" ]; then
-        #     install_dir=$(jq -r '.general_config.install_dir' "$ROOT_DIR/server_config.json")
-        # fi
         
         if [ -d "$install_dir/Plutonium" ] && [ -f "$install_dir/Plutonium/plutonium-updater" ]; then
             log "SUCCESS" "Game binaries are installed correctly"
@@ -327,7 +289,6 @@ testGameBinariesInstallation() {
     fi
     ((TOTAL_TESTS++))
 }
-# Test uninstallation process
 testUninstallation() {
     log "INFO" "Testing uninstallation process simulation"
     local test_dir="/tmp/test_uninstall"
@@ -349,17 +310,13 @@ testUninstallation() {
     ((TOTAL_TESTS++))
 }
 
-# Main test execution
 main() {
-    # Check for sudo privileges
     check_sudo
     
-    # Collect system information
     collect_system_info
     
     log "INFO" "Starting Comprehensive System Validation"
     
-    # Execute all test functions
     local test_functions=(
         testSystemUpdate
         testDependenciesInstallation
@@ -378,7 +335,6 @@ main() {
         fi
     done
     
-    # Generate final summary
     local end_time=$(date +%s)
     local total_time=$((end_time - START_TIME))
     
@@ -409,5 +365,4 @@ main() {
     fi
 }
 
-# Execute main test suite
 main

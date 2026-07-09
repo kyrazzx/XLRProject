@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Security configuration for T6 servers based on Plutonium.pw specifications
 setupSecurityConfig() {
     cat > "$WORKDIR/Server/Multiplayer/t6/data/security.json" << EOF
 {

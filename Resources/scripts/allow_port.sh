@@ -1,11 +1,9 @@
 #!/bin/bash
 
-# Function to display error messages
 display_error() {
     echo "[Error] $1" >&2
 }
 
-# Function to open a port
 open_port() {
     local port=$1
     local name=$2
@@ -19,7 +17,6 @@ open_port() {
     fi
 }
 
-# Function to reload the firewall
 reload_firewall() {
     if sudo ufw reload; then
         echo "The firewall has been reloaded successfully."
@@ -30,7 +27,6 @@ reload_firewall() {
     fi
 }
 
-# Main script
 echo "Enter the port you want to allow (Example: 4976)"
 read -p 'Port Number: ' port
 

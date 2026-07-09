@@ -1,17 +1,10 @@
 #!/bin/bash
 
-# File: uninstallDependencies.sh
-# Description: Script to uninstall dependencies for the Plutonium Call of Duty: Black Ops II Server
-# Version: 3.1.1
-# Author: Sterbweise
-# Last Updated: 07/12/2024
 
-# Import global configurations
 if [ "$1" = "--uninstall" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
-# Function to uninstall dependencies
 uninstallDependencies() {
     {
         apt-get remove -y software-properties-common apt-transport-https
@@ -19,7 +12,6 @@ uninstallDependencies() {
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "cleanup")"
     
-    # Verify uninstallation
     if dpkg -s software-properties-common &> /dev/null || dpkg -s apt-transport-https &> /dev/null
     then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} Dependencies uninstallation failed.\n"
@@ -39,7 +31,6 @@ uninstallDependencies() {
     fi
 }
 
-# Run the uninstallation function if --uninstall is provided
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--uninstall" ]; then

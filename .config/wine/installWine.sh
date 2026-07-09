@@ -43,7 +43,6 @@ installWine() {
                 fi
             done
             
-            # shellcheck source=/dev/null
             source "$HOME/.bashrc"
             
             wineboot --init 2>/dev/null || true

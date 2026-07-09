@@ -1,31 +1,21 @@
 #!/bin/bash
 
-# File: installFirewall.sh
-# Description: Script to install and configure firewall for the Plutonium Call of Duty: Black Ops II Server
-# Version: 3.1.1
-# Author: Sterbweise
-# Last Updated: 07/12/2024
 
-# Import global configurations
 if [ "$1" = "--install" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
-# Function to install firewall
 installFirewall() {
     local ssh_port="$1"
     {
-        # Check if UFW is already installed
         if ! command -v ufw &> /dev/null; then
             apt install ufw -y
         fi
 
-        # Check if fail2ban is already installed
         if ! command -v fail2ban-client &> /dev/null; then
             apt install fail2ban -y
         fi
 
-        # Configure UFW
         ufw allow "$ssh_port"/tcp
         ufw default allow outgoing
         ufw default deny incoming
@@ -33,7 +23,6 @@ installFirewall() {
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "firewall_install")"
     
-    # Verify installation
     if ! command -v ufw &> /dev/null || ! command -v fail2ban-client &> /dev/null
     then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} Firewall installation failed.\n"
@@ -59,7 +48,6 @@ installFirewall() {
     fi
 }
 
-# Run the installation function if --install or --import is provided
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--install" ]; then

@@ -4,7 +4,6 @@ XLR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 XLR_WORKDIR="$(cd "$XLR_SCRIPT_DIR/../.." && pwd)"
 
 if [ -f "$XLR_WORKDIR/.config/config.sh" ]; then
-    # shellcheck source=/dev/null
     source "$XLR_WORKDIR/.config/config.sh"
 fi
 
@@ -83,7 +82,6 @@ xlr_apply_bot_warfare_dvars() {
             fill=12
         fi
 
-        # Free-for-all / individual modes have no teams: disable team forcing.
         local gametype srv_team_force is_team_mode
         gametype=$(jq -r --arg sid "$server_id" '.servers[] | select(.id == $sid) | .gametype // ""' "$config_file")
         case "$gametype" in

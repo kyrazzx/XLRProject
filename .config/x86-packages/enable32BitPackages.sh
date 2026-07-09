@@ -1,17 +1,10 @@
 #!/bin/bash
 
-# File: enable32BitPackages.sh
-# Description: Script to enable 32-bit architecture support
-# Version: 3.1.1
-# Author: Sterbweise
-# Last Updated: 07/12/2024
 
-# Import global configurations
 if [ "$1" = "--enable" ]; then
     source /opt/T6Server/.config/config.sh
 fi
 
-# Function to enable 32-bit architecture support
 enable32BitPackages() {
     {
         if ! dpkg --print-foreign-architectures | grep -q i386; then
@@ -21,7 +14,6 @@ enable32BitPackages() {
     } > /dev/null 2>&1 &
     showProgressIndicator "$(getMessage "bit")"
     
-    # Verify installation
     if ! dpkg --print-foreign-architectures | grep -q i386; then
         printf "${COLORS[RED]}Error:${COLORS[RESET]} 32-bit package activation failed.\n"
         printf "Attempting reactivation...\n"
@@ -38,7 +30,6 @@ enable32BitPackages() {
     fi
 }
 
-# Run the enable function if --enable is provided
 if [ "$1" = "--import" ]; then
     :
 elif [ "$1" = "--enable" ]; then

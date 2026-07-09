@@ -1,5 +1,3 @@
-# Function to confirm installations
-# This allows users to confirm installations of optional components
 confirmInstallations() {
     stty sane
     if [[ -z "${manual_game_files}" ]]; then
@@ -33,14 +31,12 @@ confirmInstallations() {
         local description="${descriptions[$i]}"
         local variable="${variables[$i]}"
 
-        # Reset terminal settings to a sane state to ensure proper input handling
         stty sane
         if [[ -z "${!variable}" ]]; then
             while true; do
                 printf "\n${COLORS[YELLOW]}$(getMessage "$description") ${COLORS[RESET]}"
                 read -r input
 
-                # Convertir l'entrée en minuscules, gérer l'entrée vide
                 input=$(echo "$input" | tr '[:upper:]' '[:lower:]')
 
                 case "$input" in
@@ -60,7 +56,6 @@ confirmInstallations() {
         fi
     done
 
-    # Ask for SSH port if firewall is to be installed
     if [[ "$firewall" == "yes" ]]; then
         while true; do
             printf "\n${COLORS[YELLOW]}$(getMessage "ssh_port")${COLORS[RESET]}\n"
@@ -68,7 +63,6 @@ confirmInstallations() {
             printf ">>> "
             read -r ssh_port_input
             
-            # Validation du port plus robuste
             if [[ -z "$ssh_port_input" ]]; then
                 echo "$(getMessage "invalid_port")"
                 continue
