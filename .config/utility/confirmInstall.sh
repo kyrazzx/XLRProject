@@ -22,9 +22,9 @@ confirmInstallations() {
     fi
     export manual_game_files
 
-    local options=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
-    local descriptions=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
-    local variables=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord")
+    local options=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord" "xlr_chat_commands" "xlr_mapvote")
+    local descriptions=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord" "xlr_chat_commands" "xlr_mapvote")
+    local variables=("firewall" "dotnet" "xlr_backups" "xlr_iw4madmin" "xlr_discord" "xlr_chat_commands" "xlr_mapvote")
 
     for i in "${!options[@]}"; do
         local option="${options[$i]}"

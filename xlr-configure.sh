@@ -17,6 +17,8 @@ setupDdosProtection "$DEFAULT_DIR/Plutonium/server_config.json" 2>/dev/null || t
 setupCustomization
 source "$DEFAULT_DIR/.config/xlr/setupBotWarfare.sh" --import
 setupBotWarfare
+source "$DEFAULT_DIR/.config/xlr/setupResxtScripts.sh" --import
+setupResxtScripts
 installXlrPython
 configureIW4MAdmin
 setupSystemdServices

@@ -150,3 +150,40 @@ xlr_compile_gsc_file() {
     echo "[XLR] GSC compiled OK -> $dest_file ($(wc -c < "$dest_file") bytes)"
     return 0
 }
+
+xlr_compile_gsc_dir() {
+    local workdir="$1"
+    local src_dir="$2"
+    local dest_dir="$3"
+    local log_dir="${4:-$dest_dir}"
+    local gsc_tool src rel dest base log_file compiled_out compile_dir
+
+    gsc_tool="$(xlr_ensure_gsc_tool "$workdir/.tools/gsc-tool")" || return 1
+    mkdir -p "$dest_dir" "$log_dir"
+
+    while IFS= read -r -d '' src; do
+        rel="${src#$src_dir/}"
+        dest="$dest_dir/$rel"
+        base="$(basename "$src")"
+        compile_dir="$(dirname "$src")"
+        log_file="$log_dir/${rel//\//_}.compile.log"
+        mkdir -p "$(dirname "$dest")"
+        rm -rf "$compile_dir/compiled"
+        (
+            cd "$compile_dir" || exit 1
+            "$gsc_tool" -m comp -g t6 -s pc "$base"
+        ) >"$log_file" 2>&1 || {
+            echo "[XLR] ERROR: gsc-tool compile failed for $rel — see $log_file" >&2
+            tail -20 "$log_file" >&2 || true
+            return 1
+        }
+        compiled_out="$compile_dir/compiled/t6/$base"
+        if [ ! -f "$compiled_out" ]; then
+            echo "[XLR] ERROR: expected compiled output for $rel at $compiled_out" >&2
+            return 1
+        fi
+        cp -f "$compiled_out" "$dest"
+        rm -rf "$compile_dir/compiled"
+    done < <(find "$src_dir" -name '*.gsc' -type f -print0 | sort -z)
+    return 0
+}

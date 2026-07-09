@@ -266,6 +266,28 @@ sudo bash Plutonium/XLRManager.sh restart tdm
 
 ---
 
+## Chat commands & mapvote (Resxt)
+
+XLR integrates [Resxt/Plutonium-T6-Scripts](https://github.com/Resxt/Plutonium-T6-Scripts) **chat_commands** and **mapvote** with XLR branding (`^6[XLR]^7`, yellow mapvote accents) and **owner-only** execution (`akan3` / Plutonium ID from `customization.owner`).
+
+- Configured under `resxt_scripts` in `server_config.json`
+- Chat prefix defaults to `.` (e.g. `.help`) so `!report` is untouched
+- Mapvote enabled on TDM by default; chat commands on FFA + TDM
+
+Deploy or refresh **without reinstalling**:
+
+```bash
+# Enable in config if needed:
+jq '.resxt_scripts.chat_commands.enabled = true | .resxt_scripts.mapvote.enabled = true' Plutonium/server_config.json > /tmp/cfg.json && mv /tmp/cfg.json Plutonium/server_config.json
+
+sudo bash .config/xlr/setupResxtScripts.sh --install
+sudo bash Plutonium/XLRManager.sh restart all
+```
+
+`xlr-update.sh` also runs this automatically when enabled in config.
+
+---
+
 ## Updating
 
 ```bash
@@ -276,7 +298,7 @@ sudo systemctl restart xlr-player-tracker.service xlr-discord-bot.service
 sudo bash Plutonium/XLRManager.sh restart all
 ```
 
-`xlr-update.sh` re-applies customization, recompiles the GSC, refreshes Bot Warfare and re-applies security. Use `--full-configure` to also regenerate the `dedicated_*.cfg` from templates (destructive).
+`xlr-update.sh` re-applies customization, recompiles the GSC, refreshes Bot Warfare, Resxt scripts and re-applies security. Use `--full-configure` to also regenerate the `dedicated_*.cfg` from templates (destructive).
 
 ---
 
@@ -289,6 +311,7 @@ XLRProject/
 │   └── xlr/                              # XLR install modules
 │       ├── setupCustomization.sh        # GSC deploy + MOTD + tips dvars
 │       ├── setupBotWarfare.sh           # Bot Warfare install + dvars
+│       ├── setupResxtScripts.sh         # Resxt chat_commands + mapvote (compile + dvars)
 │       └── setupSystemd.sh              # systemd units
 ├── Plutonium/
 │   ├── XLRManager.sh                    # multi-server manager

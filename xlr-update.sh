@@ -73,6 +73,12 @@ merge_local_config() {
 
         .moderation = ($new.moderation * ($old.moderation // {})) |
 
+        .resxt_scripts = (($new.resxt_scripts // {}) * ($old.resxt_scripts // {})) |
+
+        .resxt_scripts.chat_commands = (($new.resxt_scripts.chat_commands // {}) * ($old.resxt_scripts.chat_commands // {})) |
+
+        .resxt_scripts.mapvote = (($new.resxt_scripts.mapvote // {}) * ($old.resxt_scripts.mapvote // {})) |
+
         .servers = [
 
             .servers[] as $srv |
@@ -192,6 +198,10 @@ run_light_post_update() {
     source "$DEFAULT_DIR/.config/xlr/setupBotWarfare.sh" --import
 
     setupBotWarfare || true
+
+    source "$DEFAULT_DIR/.config/xlr/setupResxtScripts.sh" --import
+
+    setupResxtScripts || true
 
     source "$DEFAULT_DIR/.config/security/setupDdosProtection.sh" --import
 
@@ -356,6 +366,12 @@ echo ""
 echo "Restart game servers (as bo2, not sudo):"
 
 echo "  cd $DEFAULT_DIR/Plutonium && ./XLRManager.sh restart all"
+
+echo ""
+
+echo "Resxt scripts (chat / mapvote) without reinstall:"
+
+echo "  sudo bash $DEFAULT_DIR/.config/xlr/setupResxtScripts.sh --install"
 
 echo ""
 

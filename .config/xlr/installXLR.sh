@@ -29,11 +29,29 @@ installXLRStack() {
             && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
     fi
 
+    if [[ "${xlr_chat_commands:-}" =~ ^[yYoO]$ ]] || [[ -z "${xlr_chat_commands}" ]]; then
+        jq '.resxt_scripts.chat_commands.enabled = true' "$WORKDIR/Plutonium/server_config.json" > "$WORKDIR/Plutonium/server_config.json.tmp" \
+            && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
+    else
+        jq '.resxt_scripts.chat_commands.enabled = false' "$WORKDIR/Plutonium/server_config.json" > "$WORKDIR/Plutonium/server_config.json.tmp" \
+            && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
+    fi
+
+    if [[ "${xlr_mapvote:-}" =~ ^[yYoO]$ ]] || [[ -z "${xlr_mapvote}" ]]; then
+        jq '.resxt_scripts.mapvote.enabled = true' "$WORKDIR/Plutonium/server_config.json" > "$WORKDIR/Plutonium/server_config.json.tmp" \
+            && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
+    else
+        jq '.resxt_scripts.mapvote.enabled = false' "$WORKDIR/Plutonium/server_config.json" > "$WORKDIR/Plutonium/server_config.json.tmp" \
+            && mv "$WORKDIR/Plutonium/server_config.json.tmp" "$WORKDIR/Plutonium/server_config.json"
+    fi
+
     installXlrPython 2>/dev/null || true
     setupDdosProtection "$WORKDIR/Plutonium/server_config.json" 2>/dev/null || true
     setupCustomization 2>/dev/null || true
     source "$WORKDIR/.config/xlr/setupBotWarfare.sh" --import 2>/dev/null || true
     setupBotWarfare 2>/dev/null || true
+    source "$WORKDIR/.config/xlr/setupResxtScripts.sh" --import 2>/dev/null || true
+    setupResxtScripts 2>/dev/null || true
 
     setupSystemdServices
 

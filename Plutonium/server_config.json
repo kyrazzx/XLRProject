@@ -55,6 +55,20 @@
         "name_pool_size": 200,
         "exclude_names": ["akan3"]
     },
+    "resxt_scripts": {
+        "chat_commands": {
+            "enabled": true,
+            "prefix": ".",
+            "server_ids": ["ffa", "tdm"]
+        },
+        "mapvote": {
+            "enabled": true,
+            "server_ids": ["tdm"],
+            "maps": "Hijacked:Raid:Nuketown:Slums:Express:Carrier:Meltdown",
+            "modes": "Team Deathmatch,tdm:Free for All,dm",
+            "vote_time": 30
+        }
+    },
     "moderation": {
         "players_db": "Plutonium/storage/xlr/players.db",
         "discord_reports_channel_id": "",
