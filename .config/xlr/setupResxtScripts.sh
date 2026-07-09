@@ -76,14 +76,16 @@ new = (
 if old in text:
     text = text.replace(old, new, 1)
 else:
-  text = re.sub(
-      r'(if \(IsDefined\(isCommand\) && isCommand\)\s*\{[^}]+\})\s*self IPrintLnBold\(message\);',
-      r'\1\n\t\telse\n\t\t{\n\t\t\tmessage = "^6[XLR]^7 " + message;\n\t\t}\n\n\t\tself IPrintLnBold(message);',
-      text,
-      count=1,
-  )
+    text = re.sub(
+        r'(if \(IsDefined\(isCommand\) && isCommand\)\s*\{[^}]+\})\s*self IPrintLnBold\(message\);',
+        r'\1\n\t\telse\n\t\t{\n\t\t\tmessage = "^6[XLR]^7 " + message;\n\t\t}\n\n\t\tself IPrintLnBold(message);',
+        text,
+        count=1,
+    )
 
 marker = 'GetPlayerPermissionLevelFromDvar()\n{'
+if marker not in text:
+    marker = 'GetPlayerPermissionLevelFromDvar()\r\n{'
 if marker in text and 'xlr_owner_permission' not in text:
     insert = (
         'GetPlayerPermissionLevelFromDvar()\n'
@@ -196,7 +198,7 @@ xlr_compile_resxt_tree() {
     local dest_scripts="$3"
     local log_dir="${4:-$workdir/.build/resxt/logs}"
     local scripts_src="$t6_root/scripts"
-    local gsc_tool rel src dest base compile_rel log_file compiled_out compile_dir
+    local gsc_tool compile_rel src dest log_file compile_tree compiled_out
 
     source "$workdir/.config/xlr/compileGsc.sh"
     gsc_tool="$(xlr_ensure_gsc_tool "$workdir/.tools/gsc-tool")" || return 1
@@ -216,33 +218,53 @@ xlr_compile_resxt_tree() {
         ordered+=("$rel")
     done < <(find "$scripts_src" -name '*.gsc' -type f -print0 | sort -z)
 
+    compile_tree="$workdir/.build/resxt/compile-tree"
+    rm -rf "$compile_tree"
+    cp -a "$scripts_src" "$compile_tree/scripts"
+
     for compile_rel in "${ordered[@]}"; do
-        src="$scripts_src/$compile_rel"
+        src="$compile_tree/scripts/$compile_rel"
         dest="$dest_scripts/$compile_rel"
-        base="$(basename "$src")"
-        compile_dir="$(dirname "$src")"
         log_file="$log_dir/${compile_rel//\//_}.compile.log"
-        mkdir -p "$(dirname "$dest")"
-        rm -rf "$compile_dir/compiled" "$t6_root/compiled"
-        (
-            cd "$t6_root" || exit 1
-            "$gsc_tool" -m comp -g t6 -s pc "scripts/$compile_rel"
-        ) >"$log_file" 2>&1 || {
-            echo "[XLR] ERROR: gsc-tool compile failed for scripts/$compile_rel — see $log_file" >&2
-            tail -20 "$log_file" >&2 || true
+        [ -f "$src" ] || {
+            echo "[XLR] ERROR: missing staged source scripts/$compile_rel" >&2
             return 1
         }
-        compiled_out="$t6_root/scripts/compiled/t6/$base"
-        if [ ! -f "$compiled_out" ]; then
-            compiled_out="$compile_dir/compiled/t6/$base"
-        fi
-        if [ ! -f "$compiled_out" ]; then
-            echo "[XLR] ERROR: expected compiled output for scripts/$compile_rel" >&2
+
+        rm -rf "$compile_tree/compiled" "$compile_tree/scripts/compiled" \
+            "$(dirname "$src")/compiled" 2>/dev/null || true
+
+        : >"$log_file"
+        if (
+            cd "$compile_tree" || exit 1
+            "$gsc_tool" -m comp -g t6 -s pc -w "$compile_tree" "scripts/$compile_rel"
+        ) >>"$log_file" 2>&1; then
+            :
+        elif (
+            cd "$(dirname "$src")" || exit 1
+            "$gsc_tool" -m comp -g t6 -s pc -w "$compile_tree" "$(basename "$src")"
+        ) >>"$log_file" 2>&1; then
+            :
+        else
+            echo "[XLR] ERROR: gsc-tool compile failed for scripts/$compile_rel — see $log_file" >&2
+            tail -30 "$log_file" >&2 || true
             return 1
         fi
-        cp -f "$compiled_out" "$dest"
-        rm -rf "$compile_dir/compiled" "$t6_root/compiled"
+
+        compiled_out="$(xlr_resolve_compiled_gsc_output "$src" "$compile_rel" "$compile_tree" "$(dirname "$src")")" || {
+            echo "[XLR] ERROR: compiled output not found for scripts/$compile_rel — see $log_file" >&2
+            tail -30 "$log_file" >&2 || true
+            find "$compile_tree" -type f \( -name '*.gsc' -o -name '*.gscbin' \) 2>/dev/null | head -20 >&2 || true
+            return 1
+        }
+
+        xlr_copy_compiled_gsc "$compiled_out" "$dest" || return 1
+        echo "[XLR] compiled scripts/$compile_rel -> $dest ($(wc -c < "$dest") bytes)" >&2
+
+        cp -a "$scripts_src/." "$compile_tree/scripts/"
     done
+
+    rm -rf "$compile_tree"
     return 0
 }
 

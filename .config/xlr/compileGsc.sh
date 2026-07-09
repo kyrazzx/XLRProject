@@ -151,6 +151,55 @@ xlr_compile_gsc_file() {
     return 0
 }
 
+xlr_resolve_compiled_gsc_output() {
+    local source_file="$1"
+    local compile_rel="$2"
+    shift 2
+    local base candidate root
+
+    base="$(basename "$source_file")"
+
+    if [ -f "$source_file" ] && xlr_gsc_looks_compiled "$source_file"; then
+        printf '%s\n' "$source_file"
+        return 0
+    fi
+
+    if [ -f "${source_file%.gsc}.gscbin" ] && xlr_gsc_looks_compiled "${source_file%.gsc}.gscbin"; then
+        printf '%s\n' "${source_file%.gsc}.gscbin"
+        return 0
+    fi
+
+    for root in "$@"; do
+        [ -n "$root" ] && [ -d "$root" ] || continue
+        while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            if xlr_gsc_looks_compiled "$candidate"; then
+                printf '%s\n' "$candidate"
+                return 0
+            fi
+        done < <(find "$root" -type f \( \
+            -path "*/compiled/t6/$compile_rel" -o \
+            -path "*/compiled/t6/$base" -o \
+            -path "*/compiled/t6/*/$base" \
+        \) 2>/dev/null)
+    done
+
+    return 1
+}
+
+xlr_copy_compiled_gsc() {
+    local compiled_out="$1"
+    local dest_file="$2"
+
+    mkdir -p "$(dirname "$dest_file")"
+    cp -f "$compiled_out" "$dest_file"
+    if ! xlr_gsc_looks_compiled "$dest_file"; then
+        echo "[XLR] ERROR: deploy file is not compiled GSC binary: $dest_file" >&2
+        return 1
+    fi
+    return 0
+}
+
 xlr_compile_gsc_dir() {
     local workdir="$1"
     local src_dir="$2"
