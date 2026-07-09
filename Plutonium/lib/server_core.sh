@@ -286,6 +286,41 @@ xlr_ensure_plutonium_bootstrapper() {
     xlr_prepare_bootstrapper "$bootstrapper"
 }
 
+xlr_ensure_dedicated_cfg() {
+    local install_dir="$1"
+    local game_path="$2"
+    local config_file_name="$3"
+    local src="$game_path/main/$config_file_name"
+    local dest="$install_dir/$config_file_name"
+
+    if [ -f "$dest" ]; then
+        return 0
+    fi
+    if [ -f "$src" ]; then
+        cp -f "$src" "$dest"
+        return 0
+    fi
+    return 1
+}
+
+xlr_resolve_exec_cfg() {
+    local install_dir="$1"
+    local game_path="$2"
+    local config_file_name="$3"
+
+    xlr_ensure_dedicated_cfg "$install_dir" "$game_path" "$config_file_name" || true
+    if [ -f "$install_dir/$config_file_name" ]; then
+        echo "$config_file_name"
+        return 0
+    fi
+    if [ -f "$game_path/main/$config_file_name" ]; then
+        echo "main/$config_file_name"
+        return 0
+    fi
+    echo "$config_file_name"
+    return 1
+}
+
 xlr_launch_server_process() {
     local config_file="$1"
     local server_config="$2"
@@ -323,6 +358,13 @@ xlr_launch_server_process() {
         return 1
     fi
 
+    local exec_cfg
+    exec_cfg=$(xlr_resolve_exec_cfg "$install_dir" "$game_path" "$config_file_name")
+    if [ ! -f "$install_dir/$config_file_name" ] && [ ! -f "$game_path/main/$config_file_name" ]; then
+        xlr_write_log "$log_dir" "$server_id" "Missing config $config_file_name (checked Plutonium/ and Server/Multiplayer/main/)"
+        return 1
+    fi
+
     local gamesetting_param=""
     local run_user wine_runner
     run_user=$(xlr_get_run_user)
@@ -345,12 +387,12 @@ xlr_launch_server_process() {
         chmod 700 \"\$XDG_RUNTIME_DIR\"
         cd \"$install_dir\" || exit 1
         while true; do
-            nice -n -10 wine \"$bootstrapper\" \"$game_mode\" \"$game_path\" -dedicated \
+            wine \"$bootstrapper\" \"$game_mode\" \"$game_path\" -dedicated \
                 +set key \"$server_key\" \
                 +set fs_game \"$mod\" \
                 +set net_ip \"0.0.0.0\" \
                 +set net_port \"$server_port\" \
-                +exec \"$config_file_name\" \
+                +exec \"$exec_cfg\" \
                 $gamesetting_param \
                 $additional_params \
                 +set rcon_password \"$server_rcon\" \
