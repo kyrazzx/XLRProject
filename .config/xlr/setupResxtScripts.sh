@@ -80,7 +80,47 @@ xlr_build_server_ports_array() {
         | select(.enabled == true)
         | select(.id as $id | ($ids | length) == 0 or ($ids | index($id)))
         | .port
-    ' "$config_file" | awk '{printf "\"%s\", ", $0}' | sed 's/, $//'
+    ' "$config_file" | awk '{printf "%s, ", $0}' | sed 's/, $//'
+}
+
+xlr_patch_resxt_command_gsc() {
+    local file="$1"
+    python3 - "$file" <<'PY'
+import sys
+
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+if "init()\n{" not in text and "\ninit()\r\n{" not in text:
+    text += "\ninit()\n{\n\tInit();\n}\n"
+open(path, "w", encoding="utf-8").write(text)
+PY
+}
+
+xlr_purge_legacy_resxt_chat() {
+    local dest_scripts="$1"
+    local legacy
+
+    for legacy in \
+        "$dest_scripts"/chat_command_*.gsc \
+        "$dest_scripts"/z_chat_command_*.gsc \
+        "$dest_scripts/mp/chat_command_suicide.gsc" \
+        "$dest_scripts/mp/z_chat_command_suicide.gsc"
+    do
+        [ -e "$legacy" ] || continue
+        rm -f "$legacy"
+    done
+}
+
+xlr_mapvote_mode_for_server() {
+    local config_file="$1"
+    local server_id="$2"
+    local gametype
+
+    gametype=$(jq -r --arg sid "$server_id" '.servers[] | select(.id == $sid) | .gametype // "war"' "$config_file")
+    case "$gametype" in
+        dm) printf '%s' "Free for All,dm" ;;
+        *) printf '%s' "Team Deathmatch,tdm" ;;
+    esac
 }
 
 xlr_patch_chat_commands_gsc() {
@@ -97,10 +137,35 @@ text = open(path, encoding="utf-8").read()
 
 text = re.sub(
     r'level\.chat_commands\["ports"\] = array\("4976", "4977"\);',
-    f'level.chat_commands["ports"] = array({ports});',
+    (
+        f'level.chat_commands["ports"] = array({ports});\n'
+        f'\tlevel.commands = [];\n'
+        f'\tforeach (xlr_cc_port in level.chat_commands["ports"])\n'
+        f'\t{{\n'
+        f'\t\tlevel.commands[xlr_cc_port] = [];\n'
+        f'\t\tlevel.commands[xlr_cc_port + ""] = level.commands[xlr_cc_port];\n'
+        f'\t}}'
+    ),
     text,
     count=1,
 )
+
+text = text.replace(
+    "if (serverPort == currentPort)",
+    'if (serverPort == currentPort || (serverPort + "") == (currentPort + ""))',
+    1,
+)
+
+if "init()\n{" not in text and "init()\r\n{" not in text:
+    main_block = "Main()\n{\n\tInitChatCommands();\n}"
+    if main_block in text:
+        text = text.replace(
+            main_block,
+            main_block + "\n\ninit()\n{\n\tInitChatCommands();\n}",
+            1,
+        )
+    else:
+        text += "\ninit()\n{\n\tInitChatCommands();\n}\n"
 
 old = (
     '\t\tif (IsDefined(isCommand) && isCommand)\n'
@@ -213,12 +278,18 @@ xlr_stage_chat_commands() {
     cp -f "$src_dir/chat_commands.gsc" "$stage_dir/" || return 1
     for file in "$src_dir"/chat_command_*.gsc; do
         [ -f "$file" ] || continue
+        local dest_name
         case "$(basename "$file")" in
-            *"unlimited_ammo "*) cp -f "$file" "$stage_dir/chat_command_unlimited_ammo.gsc" || return 1 ;;
-            *) cp -f "$file" "$stage_dir/" || return 1 ;;
+            *"unlimited_ammo "*) dest_name="z_chat_command_unlimited_ammo.gsc" ;;
+            *) dest_name="z_$(basename "$file")" ;;
         esac
+        cp -f "$file" "$stage_dir/$dest_name" || return 1
+        xlr_patch_resxt_command_gsc "$stage_dir/$dest_name" || return 1
     done
-    [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/" || true
+    if [ -f "$src_dir/mp/chat_command_suicide.gsc" ]; then
+        cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/z_chat_command_suicide.gsc" || return 1
+        xlr_patch_resxt_command_gsc "$stage_dir/mp/z_chat_command_suicide.gsc" || return 1
+    fi
 
     xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id" || return 1
     printf '%s' "$t6_root"
@@ -258,15 +329,10 @@ xlr_compile_resxt_tree() {
     [ -f "$scripts_src/chat_commands.gsc" ] && ordered+=("chat_commands.gsc")
     while IFS= read -r -d '' src; do
         ordered+=("${src#$scripts_src/}")
-    done < <(find "$scripts_src" -maxdepth 1 -name 'chat_command*.gsc' -type f -print0 | sort -z)
+    done < <(find "$scripts_src" -maxdepth 1 -name 'z_chat_command*.gsc' -type f -print0 | sort -z)
     while IFS= read -r -d '' src; do
-        rel="${src#$scripts_src/}"
-        [ "$rel" = "chat_commands.gsc" ] && continue
-        case "$rel" in
-            chat_command*) continue ;;
-        esac
-        ordered+=("$rel")
-    done < <(find "$scripts_src" -name '*.gsc' -type f -print0 | sort -z)
+        ordered+=("${src#$scripts_src/}")
+    done < <(find "$scripts_src/mp" -maxdepth 1 -name 'z_chat_command*.gsc' -type f -print0 2>/dev/null | sort -z)
 
     compile_tree="$workdir/.build/resxt/compile-tree"
     xlr_resxt_rm_rf "$compile_tree" || return 1
@@ -360,10 +426,9 @@ xlr_apply_mapvote_dvars() {
     local workdir="$1"
     local config_file="$workdir/Plutonium/server_config.json"
     local mp_main="$workdir/Server/Multiplayer/main"
-    local maps modes vote_time server_id cfg_file
+    local maps vote_time server_id cfg_file modes
 
     maps=$(jq -r '.resxt_scripts.mapvote.maps // "Hijacked:Raid:Nuketown:Slums:Express:Carrier:Meltdown"' "$config_file")
-    modes=$(jq -r '.resxt_scripts.mapvote.modes // "Team Deathmatch,tdm:Free for All,dm"' "$config_file")
     vote_time=$(jq -r '.resxt_scripts.mapvote.vote_time // 30' "$config_file")
 
     while IFS= read -r server_id; do
@@ -372,16 +437,19 @@ xlr_apply_mapvote_dvars() {
         [ -n "$cfg_file" ] && [ "$cfg_file" != "null" ] || continue
         cfg_path="$mp_main/$cfg_file"
         [ -f "$cfg_path" ] || continue
+        modes=$(xlr_mapvote_mode_for_server "$config_file" "$server_id")
 
         xlr_set_cfg_dvar "$cfg_path" "mapvote_enable" "1"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_maps" "$maps"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_modes" "$modes"
+        xlr_set_cfg_dvar "$cfg_path" "mapvote_limits_maps" "0"
+        xlr_set_cfg_dvar "$cfg_path" "mapvote_limits_modes" "0"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_vote_time" "$vote_time"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_colors_selected" "yellow"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_colors_timer" "yellow"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_colors_help_accent" "yellow"
         xlr_set_cfg_dvar "$cfg_path" "mapvote_colors_help_text" "white"
-        echo "[XLR] Mapvote dvars applied to $cfg_file"
+        echo "[XLR] Mapvote dvars applied to $cfg_file (maps only, fixed mode: $modes)"
     done < <(jq -r '.resxt_scripts.mapvote.server_ids[]?' "$config_file")
 
     while IFS= read -r server_id; do
@@ -403,6 +471,8 @@ xlr_deploy_chat_commands() {
 
     t6_root="$(xlr_stage_chat_commands "$workdir" "$config_file" "$root_dir")" || return 1
     dest_dir="$workdir/Plutonium/storage/t6/scripts"
+
+    xlr_purge_legacy_resxt_chat "$dest_dir"
 
     xlr_compile_resxt_tree "$workdir" "$t6_root" "$dest_dir" "$workdir/.build/resxt/logs-chat" || return 1
     xlr_apply_chat_command_dvars "$workdir" || return 1

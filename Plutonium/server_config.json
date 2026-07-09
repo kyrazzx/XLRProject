@@ -65,7 +65,6 @@
             "enabled": true,
             "server_ids": ["tdm"],
             "maps": "Hijacked:Raid:Nuketown:Slums:Express:Carrier:Meltdown",
-            "modes": "Team Deathmatch,tdm:Free for All,dm",
             "vote_time": 30
         }
     },
