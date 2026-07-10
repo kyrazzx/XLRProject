@@ -20,6 +20,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$plutonium_dir
+TimeoutStopSec=120
 ExecStartPre=/bin/bash $plutonium_dir/XLRManager.sh sync-servers
 ExecStart=/bin/bash $plutonium_dir/XLRManager.sh monitor
 ExecStop=/bin/bash $plutonium_dir/XLRManager.sh stop all
@@ -141,6 +142,26 @@ EnvironmentFile=-/etc/xlr/secrets.env
 [Install]
 WantedBy=multi-user.target
 EOF
+
+        cat > /etc/systemd/system/xlr-crash-watchdog.service << EOF
+[Unit]
+Description=XLR Crash Watchdog (Discord alerts)
+After=network.target xlr-manager.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$workdir/Resources/xlr
+ExecStart=$workdir/Resources/xlr/venv/bin/python $workdir/Resources/xlr/crash_watchdog.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/etc/xlr/secrets.env
+
+[Install]
+WantedBy=multi-user.target
+EOF
     fi
 
     cat > /etc/systemd/system/xlr-healthcheck.service << EOF
@@ -170,6 +191,7 @@ EOF
     systemctl enable xlr-manager.service xlr-backup.timer xlr-scheduled-restart.timer xlr-healthcheck.timer 2>/dev/null || true
     systemctl enable xlr-iw4madmin.service 2>/dev/null || true
     systemctl enable xlr-player-tracker.service 2>/dev/null || true
+    systemctl enable xlr-crash-watchdog.service 2>/dev/null || true
     systemctl enable xlr-discord-bot.service 2>/dev/null || true
 }
 

@@ -10,6 +10,7 @@ from xlr_lib import (
     getstatus_player_count,
     load_config,
     query_server_getstatus,
+    read_tracker_player_count,
     resolve_install_dir,
     resolve_public_ip,
     resolve_server_log_paths,
@@ -19,7 +20,7 @@ from xlr_lib import (
 )
 
 def main():
-    print('xlr_player_count=v3')
+    print('xlr_player_count=v4')
     config = load_config()
     general = config.get('general_config', {})
     host = general.get('rcon_ip', '127.0.0.1')
@@ -56,6 +57,7 @@ def main():
         print(f'ss_count={ss_udp_peer_count(port, public_ip=public_ip, max_clients=human_cap)}')
         print(f'api_count={api_human_player_count(server, config, public_ip=public_ip)}')
         print(f'conntrack_count={conntrack_real_player_count(port, public_ip=public_ip, max_clients=human_cap)}')
+        print(f'tracker_count={read_tracker_player_count(sid)}')
         print(f'log_count={estimate_humans_from_logs(config, server, port=port)}')
         rcon = rcon_query(host, port, password, 'status')
         preview = (rcon or '').replace('\n', ' ')[:160]

@@ -33,7 +33,18 @@ if [ ! -f "$CONFIG" ]; then
     exit 1
 fi
 
+if ! jq empty "$CONFIG" 2>/dev/null; then
+    echo "ERROR: invalid JSON in $CONFIG" >&2
+    exit 1
+fi
+
 command -v jq >/dev/null 2>&1 || { echo "Missing jq" >&2; exit 1; }
+
+server_count=$(jq '.servers | length' "$CONFIG")
+if [ "$server_count" = "0" ] || [ "$server_count" = "null" ]; then
+    echo "ERROR: no servers defined in $CONFIG" >&2
+    exit 1
+fi
 
 servers_root=$(jq -r '.general_config.servers_root // "./servers"' "$CONFIG")
 if [[ "$servers_root" != /* ]]; then
@@ -62,6 +73,7 @@ free -h 2>/dev/null || true
 df -h "$WORKROOT" 2>/dev/null | tail -1 || true
 echo ""
 
+matched=0
 while IFS= read -r server_json; do
     sid=$(echo "$server_json" | jq -r '.id')
     port=$(echo "$server_json" | jq -r '.port')
@@ -69,12 +81,16 @@ while IFS= read -r server_json; do
     enabled=$(echo "$server_json" | jq -r '.enabled // true')
 
     if [ "$enabled" != "true" ]; then
+        if [ "$TARGET" = "$sid" ] || [ "$TARGET" = "all" ]; then
+            echo "NOTE: server '$sid' exists but enabled=false (skipped)"
+        fi
         continue
     fi
     if [ "$TARGET" != "all" ] && [ "$TARGET" != "$sid" ]; then
         continue
     fi
 
+    matched=1
     log_dir="$servers_root/$sid/logs"
     stdout="$log_dir/stdout.log"
     manager="$log_dir/manager.log"
@@ -142,6 +158,13 @@ while IFS= read -r server_json; do
     tail -n "$TAIL_LINES" "$stdout"
     echo ""
 done < <(jq -c '.servers[]' "$CONFIG")
+
+if [ "$matched" -eq 0 ]; then
+    echo "ERROR: no matching server for target '$TARGET'."
+    echo "Configured servers:"
+    jq -r '.servers[] | "  - \(.id) enabled=\(.enabled // true) port=\(.port)"' "$CONFIG"
+    exit 1
+fi
 
 echo "=== Done ==="
 echo "Usage: $0 [server_id] [tail_lines]"

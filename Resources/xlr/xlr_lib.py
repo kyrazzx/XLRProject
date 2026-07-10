@@ -42,6 +42,14 @@ def discord_token():
         return token
     return os.environ.get('XLR_DISCORD_TOKEN', '')
 
+def discord_webhook_url():
+    secrets = load_secrets()
+    url = (secrets.get('DISCORD_WEBHOOK') or '').strip()
+    if url:
+        return url
+    config = load_config()
+    return (config.get('monitoring_config', {}).get('discord_webhook') or '').strip()
+
 def db_path():
     config = load_config()
     rel = config.get('moderation', {}).get('players_db', 'Plutonium/storage/xlr/players.db')
@@ -533,37 +541,41 @@ def estimate_players_from_stdout(log_path, port=None, max_bytes=524288, bot_name
     except OSError:
         return 0
     lines = _stdout_session_lines(data.splitlines(), port)
-    authed_online = {}
+    online = set()
     for line in lines:
-        auth = AUTH_RE.search(line)
-        if auth:
-            pid = auth.group(1)
-            if pid.isdigit() and int(pid) > 0:
-                authed_online[pid] = ''
-            continue
+        if 'bound socket to' in line.lower():
+            online.clear()
         connect = CONNECT_RE.search(line)
         if connect:
             name = _strip_player_name(connect.group(1)).lower()
-            if not name or name in bot_names:
+            plain = re.sub('^\\[[^\\]]+\\]', '', name).strip()
+            if not name or name in bot_names or plain in bot_names:
                 continue
-            assigned = False
-            for pid in list(authed_online.keys()):
-                if authed_online[pid] == '':
-                    authed_online[pid] = name
-                    assigned = True
-                    break
-            if not assigned:
-                authed_online[f'name:{name}'] = name
+            online.add(name)
             continue
         dropped = _disconnect_name(line)
         if dropped:
-            for pid in list(authed_online.keys()):
-                if authed_online.get(pid) == dropped:
-                    del authed_online[pid]
-                    break
-            else:
-                authed_online.pop(f'name:{dropped}', None)
-    return sum((1 for value in authed_online.values() if value))
+            online.discard(dropped)
+            plain = re.sub('^\\[[^\\]]+\\]', '', dropped).strip()
+            online.discard(plain)
+    return len(online)
+
+ACTIVE_PLAYERS_PATH = WORKROOT / 'Plutonium' / 'storage' / 'xlr' / 'active_players.json'
+
+def read_tracker_player_count(server_id):
+    if not ACTIVE_PLAYERS_PATH.is_file():
+        return None
+    try:
+        data = json.loads(ACTIVE_PLAYERS_PATH.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return None
+    entry = data.get(server_id)
+    if not entry:
+        return None
+    try:
+        return max(int(entry.get('players', 0)), 0)
+    except (TypeError, ValueError):
+        return None
 
 def resolve_install_dir(config):
     configured = (config.get('general_config', {}) or {}).get('install_dir', '')
@@ -692,6 +704,9 @@ def get_server_player_count(host, port, password, stdout_log=None, max_clients=1
                 break
     bot_names = _bot_name_cache() if server_id and config and server_uses_bot_warfare(config, server_id) else set()
     human_cap = _human_player_cap(config, server, max_clients) if config else max_clients
+    tracker_count = read_tracker_player_count(server_id) if server_id else None
+    if tracker_count is not None:
+        return min(tracker_count, human_cap)
     gs_count = getstatus_player_count(host, port, public_ip=public_ip, max_clients=human_cap, bot_names=bot_names)
     if gs_count is not None:
         return gs_count

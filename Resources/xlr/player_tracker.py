@@ -2,8 +2,9 @@ import json
 import re
 import time
 from pathlib import Path
-from xlr_lib import AUTH_RE, CLIENT_ENDPOINT_RE, CONNECT_RE, LET_PLAYER_RE, REPORT_CHAT_RE, STEAM_RE, ban_announce_message, create_report, get_active_ban_reason, init_db, is_banned, is_bot_client, is_real_api_player, match_plutonium_server, load_config, connect_db, parse_status_clients, resolve_public_ip, rcon_query, rcon_say, resolve_ips_from_conntrack, record_server_player, send_player_welcome, sync_bots_txt, sync_server_game_dvars, upsert_player, WORKROOT
+from xlr_lib import AUTH_RE, CLIENT_ENDPOINT_RE, CONNECT_RE, LET_PLAYER_RE, REPORT_CHAT_RE, STEAM_RE, WORKROOT, _bot_name_cache, _disconnect_name, _strip_player_name, ban_announce_message, create_report, get_active_ban_reason, init_db, is_banned, is_bot_client, is_real_api_player, match_plutonium_server, load_config, connect_db, parse_status_clients, resolve_public_ip, rcon_query, rcon_say, resolve_ips_from_conntrack, record_server_player, send_player_welcome, sync_bots_txt, sync_server_game_dvars, upsert_player
 OFFSET_STATE_PATH = WORKROOT / 'Plutonium' / 'storage' / 'xlr' / 'tracker_offsets.json'
+ACTIVE_PLAYERS_PATH = WORKROOT / 'Plutonium' / 'storage' / 'xlr' / 'active_players.json'
 
 def enabled_servers(config):
     general = config.get('general_config', {})
@@ -110,6 +111,41 @@ def handle_report_line(conn, server_id, line):
     report_id = create_report(conn, reporter_name, reporter_id, resolved_name, target_id, reason, server_id, 'game_chat')
     return report_id
 
+def count_active_humans(session, bot_names=None):
+    bot_names = bot_names or set()
+    total = 0
+    for pid, entry in (session.get('sessions') or {}).items():
+        try:
+            if int(pid) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        name = _strip_player_name(entry.get('name') or '').lower()
+        plain = re.sub('^\\[[^\\]]+\\]', '', name).strip()
+        if not name or name in bot_names or plain in bot_names:
+            continue
+        total += 1
+    return total
+
+def save_active_player_counts(state, config):
+    bot_names = _bot_name_cache()
+    payload = {}
+    for server in enabled_servers(config):
+        sid = server['id']
+        session = state.get(sid, {})
+        payload[sid] = {'players': count_active_humans(session, bot_names), 'updated': time.time()}
+    ACTIVE_PLAYERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ACTIVE_PLAYERS_PATH.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+
+def remove_session_by_name(session, name):
+    target = _strip_player_name(name).lower()
+    if not target:
+        return
+    for pid, entry in list((session.get('sessions') or {}).items()):
+        entry_name = _strip_player_name(entry.get('name') or '').lower()
+        if entry_name == target:
+            session['sessions'].pop(pid, None)
+
 def player_key(client):
     guid = client.get('guid') or ''
     if guid and guid.isdigit():
@@ -181,24 +217,28 @@ def process_server(conn, config, server, state, offset_state):
         (offset, lines) = tail_file(path, offset)
         offset_state[state_key] = offset
         for line in lines:
+            if 'bound socket to' in line.lower():
+                session['sessions'] = {}
             endpoint = CLIENT_ENDPOINT_RE.search(line)
             if endpoint:
                 session.setdefault('pending_ips', []).append(endpoint.group(1))
             auth = AUTH_RE.search(line)
             if auth:
                 pid = auth.group(1)
-                session['sessions'].setdefault(pid, {'plutonium_id': pid, 'name': '', 'steam_id': None, 'ip': ''})
-                session['awaiting_connect'] = pid
+                if pid.isdigit() and int(pid) > 0:
+                    session['sessions'].setdefault(pid, {'plutonium_id': pid, 'name': '', 'steam_id': None, 'ip': ''})
+                    session['awaiting_connect'] = pid
             let_player = LET_PLAYER_RE.search(line)
             if let_player:
                 pid = let_player.group(1)
-                session['sessions'].setdefault(pid, {'plutonium_id': pid, 'name': '', 'steam_id': None, 'ip': ''})
-                session['awaiting_connect'] = pid
-                entry = session['sessions'][pid]
-                if not entry.get('ip'):
-                    ip = take_pending_ip(session)
-                    if ip:
-                        entry['ip'] = ip
+                if pid.isdigit() and int(pid) > 0:
+                    session['sessions'].setdefault(pid, {'plutonium_id': pid, 'name': '', 'steam_id': None, 'ip': ''})
+                    session['awaiting_connect'] = pid
+                    entry = session['sessions'][pid]
+                    if not entry.get('ip'):
+                        ip = take_pending_ip(session)
+                        if ip:
+                            entry['ip'] = ip
             connect = CONNECT_RE.search(line)
             if connect:
                 name = connect.group(1)
@@ -208,6 +248,9 @@ def process_server(conn, config, server, state, offset_state):
                     entry['name'] = name
                     upsert_session_player(conn, session, server, entry, allow_conntrack=True)
                 session['awaiting_connect'] = None
+            dropped = _disconnect_name(line)
+            if dropped:
+                remove_session_by_name(session, dropped)
             steam = STEAM_RE.search(line)
             if steam:
                 steam_id = steam.group(1)
@@ -285,6 +328,7 @@ def main():
                 process_server(conn, config, server, state, offset_state)
             except Exception as exc:
                 print(f"[player_tracker] {server['id']}: {exc}")
+        save_active_player_counts(state, config)
         save_offset_state(offset_state)
         time.sleep(2)
 if __name__ == '__main__':

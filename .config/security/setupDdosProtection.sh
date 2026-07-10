@@ -109,6 +109,8 @@ table inet xlr {
 
 ${fragment_rule}
 
+        ip saddr 127.0.0.1 udp dport { $nft_ports } accept
+
         udp dport { $nft_ports } meta length lt ${udp_min} drop
         udp dport { $nft_ports } meta length gt ${udp_max} drop
 
@@ -137,6 +139,8 @@ table inet xlr {
         type filter hook input priority filter - 10; policy accept;
 
         ip saddr @banned_ips udp dport { $nft_ports } drop
+
+        ip saddr 127.0.0.1 udp dport { $nft_ports } accept
 
         udp dport { $nft_ports } meta length lt ${udp_min} drop
         udp dport { $nft_ports } meta length gt ${udp_max} drop

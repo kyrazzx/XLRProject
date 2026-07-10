@@ -96,7 +96,10 @@
         "update_interval": 30,
         "log_directory": "./logs/monitoring",
         "max_log_files": 30,
-        "discord_webhook": ""
+        "discord_webhook": "",
+        "watchdog_enabled": true,
+        "watchdog_interval": 20,
+        "alert_cooldown_seconds": 600
     },
     "discord_config": {
         "enabled": false,

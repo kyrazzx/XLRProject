@@ -510,12 +510,21 @@ xlr_send_discord_webhook() {
 
 xlr_port_listening() {
     local port="$1"
-    ss -H -ulnp 2>/dev/null | grep -q ":${port} "
+    ss -H -ulnp 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
+}
+
+xlr_server_log_shows_recent_heartbeat() {
+    local stdout_log="$1"
+    [ ! -f "$stdout_log" ] && return 1
+    tail -120 "$stdout_log" | grep -qiE 'Heartbeat successful|heartbeat successful'
 }
 
 xlr_server_log_shows_limbo() {
     local stdout_log="$1"
     [ ! -f "$stdout_log" ] && return 1
+    if xlr_server_log_shows_recent_heartbeat "$stdout_log"; then
+        return 1
+    fi
     if tail -80 "$stdout_log" | grep -qiE 'Loading fastfile|Unloading fastfile|Loading level'; then
         return 1
     fi
@@ -559,8 +568,12 @@ xlr_server_needs_recovery() {
         return 1
     fi
 
+    if xlr_server_log_shows_recent_heartbeat "$stdout_log"; then
+        return 1
+    fi
+
     uptime_sec=$(xlr_process_uptime_seconds "$pid")
-    if [ "$uptime_sec" -ge 180 ] && ! xlr_port_listening "$port"; then
+    if [ "$uptime_sec" -ge 300 ] && ! xlr_port_listening "$port"; then
         return 0
     fi
 
