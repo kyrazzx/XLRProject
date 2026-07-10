@@ -68,7 +68,7 @@ merge_local_config() {
         echo "[XLR] ERROR: merge would empty servers list — keeping previous config" >&2
         rm -f "$tmp_out"
         cp -f "$old_config" "$new_config"
-        return 1
+        return 0
     fi
 
     mv -f "$tmp_out" "$new_config"
