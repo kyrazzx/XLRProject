@@ -240,6 +240,7 @@ xlr_monitor_once() {
     webhook_url=$(jq -r '.monitoring_config.discord_webhook // ""' "$config_file")
     mkdir -p "$monitoring_log_dir"
     xlr_rotate_logs "$monitoring_log_dir" "$max_log_files"
+    xlr_stop_disabled_servers "$config_file" "$monitoring_log_dir"
 
     while IFS= read -r server; do
         local server_id port enabled max_cpu max_memory pid current_cpu current_memory
@@ -295,26 +296,44 @@ xlr_run_backup() {
 
 xlr_scheduled_restart() {
     local config_file="$1"
-    local idle_hours rcon_ip
-    idle_hours=$(jq -r '.restart_config.idle_hours // 2' "$config_file")
+    local idle_hours rcon_ip restart_enabled
+    restart_enabled=$(jq -r '.restart_config.enabled // true' "$config_file")
+    if [ "$restart_enabled" != "true" ]; then
+        return 0
+    fi
+    idle_hours=$(jq -r '.restart_config.idle_hours // 6' "$config_file")
     rcon_ip=$(jq -r '.general_config.rcon_ip // "127.0.0.1"' "$config_file")
     local idle_seconds=$((idle_hours * 3600))
 
     while IFS= read -r server; do
-        local server_id port rcon_pass pid uptime started_at player_count
+        local server_id port rcon_pass pid uptime started_at player_count enabled stdout_log
+        enabled=$(echo "$server" | jq -r '.enabled // true')
+        [ "$enabled" != "true" ] && continue
         server_id=$(echo "$server" | jq -r '.id')
         port=$(echo "$server" | jq -r '.port')
         rcon_pass=$(echo "$server" | jq -r '.rcon_password // .key')
         if ! pid=$(xlr_is_server_running "$config_file" "$server_id" "$port"); then
             continue
         fi
-        player_count=$(xlr_get_player_count "$rcon_ip" "$port" "$rcon_pass")
+        stdout_log="$(xlr_server_log_dir "$config_file" "$server_id")/stdout.log"
+        player_count=$(xlr_get_scheduled_restart_player_count "$config_file" "$server_id" "$rcon_ip" "$port" "$rcon_pass")
         started_at=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
         local now uptime_sec
         now=$(date +%s)
         uptime_sec=$((now - started_at))
-        if [ "$player_count" -eq 0 ] && [ "$uptime_sec" -gt "$idle_seconds" ]; then
-            xlr_write_log "$(xlr_server_log_dir "$config_file" "$server_id")" "$server_id" "Scheduled restart (idle)"
+        if [ "$player_count" -gt 0 ]; then
+            continue
+        fi
+        if xlr_server_log_shows_recent_humans "$stdout_log"; then
+            xlr_write_log "$(xlr_server_log_dir "$config_file" "$server_id")" "$server_id" "Scheduled restart skipped (recent human activity in logs)"
+            continue
+        fi
+        if xlr_server_log_shows_recent_connections "$stdout_log"; then
+            xlr_write_log "$(xlr_server_log_dir "$config_file" "$server_id")" "$server_id" "Scheduled restart skipped (recent client activity in logs)"
+            continue
+        fi
+        if [ "$uptime_sec" -gt "$idle_seconds" ]; then
+            xlr_write_log "$(xlr_server_log_dir "$config_file" "$server_id")" "$server_id" "Scheduled restart (idle, humans=0, uptime=${uptime_sec}s)"
             xlr_cmd_restart_one "$config_file" "$server"
         fi
     done < <(jq -c '.servers[]' "$config_file")

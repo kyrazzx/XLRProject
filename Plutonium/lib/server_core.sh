@@ -675,6 +675,79 @@ xlr_server_log_shows_recent_heartbeat() {
     tail -120 "$stdout_log" | grep -qiE 'Heartbeat successful|heartbeat successful'
 }
 
+xlr_server_log_shows_recent_humans() {
+    local stdout_log="$1"
+    [ ! -f "$stdout_log" ] && return 1
+    tail -400 "$stdout_log" | grep -qiE 'successfully authenticated|Letting player with userid'
+}
+
+xlr_server_log_shows_recent_connections() {
+    local stdout_log="$1"
+    [ ! -f "$stdout_log" ] && return 1
+    tail -40 "$stdout_log" | grep -qiE "client '.*' connected|successfully authenticated"
+}
+
+xlr_get_tracker_human_count() {
+    local config_file="$1"
+    local server_id="$2"
+    local workdir tracker_file count
+
+    workdir=$(xlr_get_workdir "$config_file")
+    tracker_file="$workdir/Plutonium/storage/xlr/active_players.json"
+    [ ! -f "$tracker_file" ] && return 1
+
+    count=$(jq -r --arg sid "$server_id" '.[$sid].players // empty' "$tracker_file" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "null" ]; then
+        return 1
+    fi
+    echo "$count"
+    return 0
+}
+
+xlr_get_scheduled_restart_player_count() {
+    local config_file="$1"
+    local server_id="$2"
+    local rcon_ip="$3"
+    local port="$4"
+    local rcon_pass="$5"
+    local tracker_count rcon_count stdout_log
+
+    tracker_count=$(xlr_get_tracker_human_count "$config_file" "$server_id" 2>/dev/null || echo "")
+    if [ -n "$tracker_count" ] && [ "$tracker_count" != "null" ]; then
+        echo "$tracker_count"
+        return 0
+    fi
+
+    rcon_count=$(xlr_get_player_count "$rcon_ip" "$port" "$rcon_pass")
+    stdout_log="$(xlr_server_log_dir "$config_file" "$server_id")/stdout.log"
+    if [ "$rcon_count" -eq 0 ] && xlr_server_log_shows_recent_humans "$stdout_log"; then
+        echo "1"
+        return 0
+    fi
+
+    echo "$rcon_count"
+}
+
+xlr_stop_disabled_servers() {
+    local config_file="$1"
+    local monitoring_log_dir="${2:-}"
+
+    while IFS= read -r server; do
+        local enabled server_id port
+        enabled=$(echo "$server" | jq -r '.enabled // true')
+        [ "$enabled" = "true" ] && continue
+        server_id=$(echo "$server" | jq -r '.id')
+        port=$(echo "$server" | jq -r '.port')
+        if xlr_is_server_running "$config_file" "$server_id" "$port" >/dev/null \
+            || xlr_get_wrapper_pid "$config_file" "$server_id" >/dev/null; then
+            xlr_stop_server "$config_file" "$server"
+            if [ -n "$monitoring_log_dir" ]; then
+                xlr_write_log "$monitoring_log_dir" "$server_id" "Stopped disabled server (orphan process)"
+            fi
+        fi
+    done < <(jq -c '.servers[]' "$config_file")
+}
+
 xlr_server_log_shows_limbo() {
     local stdout_log="$1"
     [ ! -f "$stdout_log" ] && return 1

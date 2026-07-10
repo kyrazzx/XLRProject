@@ -74,8 +74,9 @@
         "ingame_report_command": "!report"
     },
     "restart_config": {
-        "idle_hours": 2,
-        "enabled": true
+        "idle_hours": 6,
+        "enabled": true,
+        "require_tracker_zero_humans": true
     },
     "backup_config": {
         "enabled": true,

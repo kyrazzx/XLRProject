@@ -80,7 +80,7 @@ Description=XLR Scheduled Restart Timer
 
 [Timer]
 OnBootSec=30min
-OnUnitActiveSec=1h
+OnUnitActiveSec=6h
 Persistent=true
 
 [Install]

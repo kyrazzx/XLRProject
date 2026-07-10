@@ -20,6 +20,10 @@ ERROR_RE = re.compile(
     re.I,
 )
 LIMBO_RE = re.compile(r'no current map loaded|no map specified in sv_maprotation|map_restart will do nothing', re.I)
+INTENTIONAL_RESTART_RE = re.compile(
+    r'Scheduled restart \(idle|Scheduled restart skipped|Starting XLR \|',
+    re.I,
+)
 
 
 def format_duration(seconds):
@@ -232,6 +236,13 @@ def mark_alert(state_entry, kind):
     state_entry['last_alert_ts'] = time.time()
 
 
+def recent_intentional_restart(paths, grace_seconds=240):
+    manager_tail = tail_text(paths['manager'], lines=30)
+    if INTENTIONAL_RESTART_RE.search(manager_tail):
+        return True
+    return False
+
+
 def check_server(config, server, state, webhook_url, cooldown):
     sid = server.get('id')
     port = int(server.get('port'))
@@ -253,6 +264,15 @@ def check_server(config, server, state, webhook_url, cooldown):
         entry['last_seen_up'] = time.time()
     else:
         if was_running and should_alert(entry, 'down', cooldown):
+            if recent_intentional_restart(paths):
+                entry['restart_grace_until'] = time.time() + 240
+                entry['running'] = False
+                entry['pid'] = None
+                return
+            if float(entry.get('restart_grace_until', 0)) > time.time():
+                entry['running'] = False
+                entry['pid'] = None
+                return
             started_at = float(entry.get('started_at') or entry.get('last_seen_up') or time.time())
             uptime_before = max(int(time.time() - started_at), 0)
             summary = errors[-5:] if errors else ['Process exited or stopped responding.']
