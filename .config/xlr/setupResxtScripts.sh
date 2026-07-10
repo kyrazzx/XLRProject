@@ -108,6 +108,43 @@ xlr_mapvote_mode_for_server() {
     esac
 }
 
+xlr_patch_ufo_mode_gsc() {
+    local file="$1"
+
+    python3 - "$file" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+
+if "xlr: only unlink when linked" in text:
+    open(path, "w", encoding="utf-8").write(text)
+    sys.exit(0)
+
+old = re.compile(
+    r"(\t\telse\s*\{\s*\n"
+    r"\t\t\tself Unlink\(\);\s*\n"
+    r"\t\t\tself\.fly = 0;\s*\n"
+    r"\t\t\})",
+    re.MULTILINE,
+)
+new = (
+    "\t\telse if (self.fly == 1)\n"
+    "\t\t{\n"
+    "\t\t\tself Unlink(); // xlr: only unlink when linked\n"
+    "\t\t\tself.fly = 0;\n"
+    "\t\t}"
+)
+patched, count = old.subn(new, text, count=1)
+if count != 1:
+    print(f"[XLR] ERROR: ufo mode patch did not apply to {path}", file=sys.stderr)
+    sys.exit(1)
+
+open(path, "w", encoding="utf-8").write(patched)
+PY
+}
+
 xlr_patch_chat_commands_gsc() {
     local file="$1"
     local ports_csv="$2"
@@ -257,6 +294,8 @@ xlr_stage_chat_commands() {
         esac
     done
     [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/" || true
+
+    [ -f "$stage_dir/chat_command_ufo_mode.gsc" ] && xlr_patch_ufo_mode_gsc "$stage_dir/chat_command_ufo_mode.gsc" || true
 
     xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id" || return 1
     printf '%s' "$t6_root"

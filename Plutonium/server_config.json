@@ -63,7 +63,7 @@
         },
         "mapvote": {
             "enabled": true,
-            "server_ids": ["tdm"],
+            "server_ids": ["ffa", "tdm"],
             "maps": "Hijacked:Raid:Nuketown:Slums:Express:Carrier:Meltdown",
             "vote_time": 30
         }
