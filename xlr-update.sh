@@ -20,7 +20,7 @@ usage() {
 merge_local_config() {
     local new_config="$1"
     local old_config="$2"
-    local tmp_out
+    local tmp_out count
 
     tmp_out="$(mktemp)"
     jq -s '
@@ -40,22 +40,37 @@ merge_local_config() {
         .resxt_scripts = (($new.resxt_scripts // {}) * ($old.resxt_scripts // {})) |
         .resxt_scripts.chat_commands = (($new.resxt_scripts.chat_commands // {}) * ($old.resxt_scripts.chat_commands // {})) |
         .resxt_scripts.mapvote = (($new.resxt_scripts.mapvote // {}) * ($old.resxt_scripts.mapvote // {})) |
-        .servers = [
-            .servers[] as $srv |
-            ($old.servers[]? | select(.id == $srv.id)) as $prev |
-            if $prev then
-                $srv |
-                .key = $prev.key |
-                .rcon_password = $prev.rcon_password |
-                .enabled = $prev.enabled |
-                .port = $prev.port |
-                .name = ($prev.name // $srv.name) |
-                .additional_params = ($srv.additional_params * ($prev.additional_params // {}))
+        .servers = (
+            if (($old.servers // []) | length) > 0 and (($new.servers // []) | length) == 0 then
+                $old.servers
             else
-                $srv
+                [
+                    .servers[] as $srv |
+                    ($old.servers[]? | select(.id == $srv.id)) as $prev |
+                    if $prev then
+                        $srv |
+                        .key = $prev.key |
+                        .rcon_password = $prev.rcon_password |
+                        .enabled = $prev.enabled |
+                        .port = $prev.port |
+                        .name = ($prev.name // $srv.name) |
+                        .additional_params = ($srv.additional_params * ($prev.additional_params // {}))
+                    else
+                        $srv
+                    end
+                ]
             end
-        ]
+        )
     ' "$new_config" "$old_config" > "$tmp_out"
+
+    count=$(jq -r '.servers | length' "$tmp_out" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "null" ] || [ "$count" -lt 1 ]; then
+        echo "[XLR] ERROR: merge would empty servers list — keeping previous config" >&2
+        rm -f "$tmp_out"
+        cp -f "$old_config" "$new_config"
+        return 1
+    fi
+
     mv -f "$tmp_out" "$new_config"
 }
 
@@ -79,7 +94,7 @@ prepare_git_update() {
 sync_install_paths() {
     local config_file="$1"
     local workdir="$2"
-    local tmp_out
+    local tmp_out count
 
     tmp_out="$(mktemp)"
     jq --arg w "$workdir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
@@ -91,6 +106,14 @@ sync_install_paths() {
         .iw4madmin_config.manual_log_path = ($w + "/Plutonium/storage/t6/logs") |
         .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
     ' "$config_file" > "$tmp_out"
+
+    count=$(jq -r '.servers | length' "$tmp_out" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "null" ] || [ "$count" -lt 1 ]; then
+        echo "[XLR] ERROR: sync_install_paths would empty servers — skipped" >&2
+        rm -f "$tmp_out"
+        return 1
+    fi
+
     mv -f "$tmp_out" "$config_file"
 }
 
@@ -155,7 +178,12 @@ if [ -f "$BACKUP_DIR/server_config.json" ]; then
     merge_local_config "$CONFIG_FILE" "$BACKUP_DIR/server_config.json"
 fi
 
-sync_install_paths "$CONFIG_FILE" "$DEFAULT_DIR"
+sync_install_paths "$CONFIG_FILE" "$DEFAULT_DIR" || true
+
+if ! jq -e '.servers | length > 0' "$CONFIG_FILE" >/dev/null 2>&1; then
+    echo "[XLR] ERROR: server_config.json has no servers after update — restoring backup"
+    cp -f "$BACKUP_DIR/server_config.json" "$CONFIG_FILE"
+fi
 
 if [ -f "$BACKUP_DIR/secrets.env" ]; then
     sudo mkdir -p /etc/xlr

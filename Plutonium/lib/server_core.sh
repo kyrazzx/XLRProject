@@ -33,6 +33,110 @@ xlr_get_workdir() {
     dirname "$(xlr_get_install_dir "$config_file")"
 }
 
+xlr_config_lock_file() {
+    echo "${1}.lock"
+}
+
+xlr_validate_server_config() {
+    local config_file="$1"
+    local reason=""
+
+    if [ ! -f "$config_file" ]; then
+        echo "missing file: $config_file"
+        return 1
+    fi
+
+    if ! jq empty "$config_file" 2>/dev/null; then
+        echo "invalid JSON in $config_file"
+        return 1
+    fi
+
+    local count
+    count=$(jq -r '.servers | length' "$config_file" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "null" ] || [ "$count" -lt 1 ]; then
+        echo "servers array empty or missing (length=${count:-0})"
+        return 1
+    fi
+
+    return 0
+}
+
+xlr_write_server_config_jq() {
+    local config_file="$1"
+    shift
+    local lock_file tmp_out count
+
+    lock_file=$(xlr_config_lock_file "$config_file")
+    tmp_out="$(mktemp "${config_file}.tmp.XXXXXX")"
+
+    (
+        flock -w 30 9 || {
+            echo "ERROR: could not lock $config_file (another update in progress?)" >&2
+            return 1
+        }
+
+        if ! jq "$@" "$config_file" > "$tmp_out"; then
+            rm -f "$tmp_out"
+            echo "ERROR: jq failed updating $config_file" >&2
+            return 1
+        fi
+
+        if ! jq empty "$tmp_out" 2>/dev/null; then
+            rm -f "$tmp_out"
+            echo "ERROR: jq produced invalid JSON for $config_file" >&2
+            return 1
+        fi
+
+        count=$(jq -r '.servers | length' "$tmp_out" 2>/dev/null)
+        if [ -z "$count" ] || [ "$count" = "null" ] || [ "$count" -lt 1 ]; then
+            rm -f "$tmp_out"
+            echo "ERROR: refusing to write $config_file without servers (length=${count:-0})" >&2
+            return 1
+        fi
+
+        cp -f "$config_file" "${config_file}.bak" 2>/dev/null || true
+        mv -f "$tmp_out" "$config_file"
+        return 0
+    ) 9>"$lock_file"
+}
+
+xlr_list_server_ids() {
+    local config_file="$1"
+    jq -r '.servers[]?.id // empty' "$config_file" 2>/dev/null
+}
+
+xlr_restore_server_config() {
+    local config_file="$1"
+    local workdir backup_root latest_backup owner_home
+
+    workdir=$(dirname "$(dirname "$config_file")")
+    owner_home=$(getent passwd "$(stat -c '%U' "$config_file" 2>/dev/null || echo "${USER:-root}")" | cut -d: -f6)
+    backup_root="${owner_home}/xlr-backups"
+    if [ ! -d "$backup_root" ]; then
+        backup_root="$workdir/backups"
+    fi
+
+    latest_backup=$(find "$backup_root" -maxdepth 2 -type f -name 'server_config.json' 2>/dev/null | sort -r | head -n 1)
+    if [ -z "$latest_backup" ] && [ -f "${config_file}.bak" ]; then
+        latest_backup="${config_file}.bak"
+    fi
+
+    if [ -z "$latest_backup" ] || [ ! -f "$latest_backup" ]; then
+        echo "ERROR: no server_config backup found under $backup_root or ${config_file}.bak" >&2
+        return 1
+    fi
+
+    if ! jq empty "$latest_backup" 2>/dev/null; then
+        echo "ERROR: backup is not valid JSON: $latest_backup" >&2
+        return 1
+    fi
+
+    cp -f "$config_file" "${config_file}.broken.$(date +%s)" 2>/dev/null || true
+    cp -f "$latest_backup" "$config_file"
+    echo "Restored $config_file from $latest_backup"
+    return 0
+}
+
 xlr_sync_config_paths() {
     local config_file="$1"
     local workdir plutonium_dir
@@ -41,7 +145,15 @@ xlr_sync_config_paths() {
     if [ ! -f "$config_file" ]; then
         return 1
     fi
-    jq --arg w "$workdir" --arg pd "$plutonium_dir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
+
+    local current_pd current_mp
+    current_pd=$(jq -r '.general_config.install_dir // ""' "$config_file")
+    current_mp=$(jq -r '.general_config.game_path_mp // ""' "$config_file")
+    if [ "$current_pd" = "$plutonium_dir" ] && [ "$current_mp" = "$workdir/Server/Multiplayer" ]; then
+        return 0
+    fi
+
+    xlr_write_server_config_jq "$config_file" --arg w "$workdir" --arg pd "$plutonium_dir" --arg mp "$workdir/Server/Multiplayer" --arg zm "$workdir/Server/Zombie" '
         .general_config.install_dir = $pd |
         .general_config.game_path_mp = $mp |
         .general_config.game_path_zm = $zm |
@@ -50,7 +162,7 @@ xlr_sync_config_paths() {
         .iw4madmin_config.install_dir = ($w + "/IW4MAdmin") |
         .iw4madmin_config.manual_log_path = ($pd + "/storage/t6/logs") |
         .servers |= map(.game_path = (if .mode == "t6zm" then $zm else $mp end))
-    ' "$config_file" > "$config_file.tmp" && mv -f "$config_file.tmp" "$config_file"
+    '
 }
 
 xlr_resolve_game_path() {
@@ -106,6 +218,33 @@ xlr_server_state_file() {
     local servers_root
     servers_root=$(xlr_get_servers_root "$config_file")
     echo "$servers_root/$server_id/server.state"
+}
+
+xlr_server_restart_marker() {
+    local config_file="$1"
+    local server_id="$2"
+    local servers_root
+    servers_root=$(xlr_get_servers_root "$config_file")
+    echo "$servers_root/$server_id/last_restart.ts"
+}
+
+xlr_monitor_restart_allowed() {
+    local config_file="$1"
+    local server_id="$2"
+    local min_interval="${3:-90}"
+    local marker now last
+
+    marker=$(xlr_server_restart_marker "$config_file" "$server_id")
+    now=$(date +%s)
+    if [ -f "$marker" ]; then
+        last=$(cat "$marker" 2>/dev/null || echo 0)
+        if [ "$((now - last))" -lt "$min_interval" ]; then
+            return 1
+        fi
+    fi
+    mkdir -p "$(dirname "$marker")"
+    echo "$now" > "$marker"
+    return 0
 }
 
 xlr_find_server_pid() {

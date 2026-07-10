@@ -48,6 +48,8 @@ xlr_display_help() {
     echo "  sync-iw4m          Sync IW4MAdmin server list"
     echo "  scheduled-restart  Restart idle servers based on schedule"
     echo "  sync-servers       Stop disabled servers and start enabled ones"
+    echo "  validate-config    Check server_config.json integrity"
+    echo "  restore-config     Restore server_config.json from latest backup"
     echo "  --help             Show this help"
     echo ""
     echo "Configuration: server_config.json"
@@ -77,10 +79,75 @@ xlr_foreach_server() {
         server=$(xlr_get_server_by_id "$config_file" "$target")
         if [ -z "$server" ]; then
             echo -e "${XLR_COLORS[red]}Unknown server:${XLR_COLORS[reset]} $target"
+            local reason
+            reason=$(xlr_validate_server_config "$config_file" 2>&1 || true)
+            if [ -n "$reason" ]; then
+                echo -e "${XLR_COLORS[yellow]}Config problem:${XLR_COLORS[reset]} $reason"
+                echo "Try: $0 restore-config"
+            else
+                echo "Configured servers: $(xlr_list_server_ids "$config_file" | paste -sd, -)"
+            fi
             return 1
         fi
         "$callback" "$config_file" "$server"
     fi
+}
+
+xlr_cmd_validate_config() {
+    local config_file="$1"
+    local reason count
+
+    if xlr_validate_server_config "$config_file" >/dev/null; then
+        count=$(jq -r '.servers | length' "$config_file")
+        echo -e "${XLR_COLORS[green]}OK${XLR_COLORS[reset]}: $config_file ($count servers)"
+        jq -r '.servers[] | "  - \(.id) enabled=\(.enabled // true) port=\(.port)"' "$config_file"
+        return 0
+    fi
+
+    reason=$(xlr_validate_server_config "$config_file")
+    echo -e "${XLR_COLORS[red]}INVALID${XLR_COLORS[reset]}: $reason"
+    echo "File: $config_file"
+    if [ -f "${config_file}.bak" ]; then
+        echo "Local backup exists: ${config_file}.bak"
+    fi
+    echo "Restore: $0 restore-config"
+    return 1
+}
+
+xlr_cmd_restore_config() {
+    local config_file="$1"
+    if xlr_restore_server_config "$config_file"; then
+        xlr_sync_config_paths "$config_file" || true
+        echo -e "${XLR_COLORS[green]}Config restored. Verify with:${XLR_COLORS[reset]} $0 validate-config"
+        return 0
+    fi
+    return 1
+}
+
+xlr_monitor_restart_server() {
+    local config_file="$1"
+    local server="$2"
+    local reason="$3"
+    local monitoring_log_dir webhook_url server_id
+
+    server_id=$(echo "$server" | jq -r '.id')
+    monitoring_log_dir=$(jq -r '.monitoring_config.log_directory // "./logs/monitoring"' "$config_file")
+    if [[ "$monitoring_log_dir" != /* ]]; then
+        monitoring_log_dir="$XLR_MANAGER_DIR/$monitoring_log_dir"
+    fi
+    webhook_url=$(jq -r '.monitoring_config.discord_webhook // ""' "$config_file")
+
+    if ! xlr_monitor_restart_allowed "$config_file" "$server_id" 90; then
+        xlr_write_log "$monitoring_log_dir" "$server_id" "Restart skipped (cooldown 90s): $reason"
+        return 1
+    fi
+
+    xlr_write_log "$monitoring_log_dir" "$server_id" "$reason"
+    xlr_send_discord_webhook "$webhook_url" "XLR: $server_id — $reason"
+    xlr_stop_server "$config_file" "$server"
+    sleep 2
+    xlr_launch_server_process "$config_file" "$server"
+    return 0
 }
 
 xlr_cmd_sync_servers() {
@@ -188,28 +255,18 @@ xlr_monitor_once() {
             if wrapper_pid=$(xlr_get_wrapper_pid "$config_file" "$server_id"); then
                 wrapper_uptime=$(xlr_process_uptime_seconds "$wrapper_pid")
                 if [ "$wrapper_uptime" -ge 45 ]; then
-                    xlr_write_log "$monitoring_log_dir" "$server_id" "Wrapper alive but no game process for ${wrapper_uptime}s, forcing full restart"
-                    xlr_send_discord_webhook "$webhook_url" "XLR: $server_id wrapper alive but game is down, forcing restart..."
-                    xlr_stop_server "$config_file" "$server"
-                    sleep 2
-                    xlr_launch_server_process "$config_file" "$server"
+                    xlr_monitor_restart_server "$config_file" "$server" "Wrapper alive but no game process for ${wrapper_uptime}s, forcing full restart"
                 else
                     xlr_write_log "$monitoring_log_dir" "$server_id" "Game process down, wrapper bootstrapping (${wrapper_uptime}s)"
                 fi
                 continue
             fi
-            xlr_write_log "$monitoring_log_dir" "$server_id" "Server down, restarting"
-            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id is down, restarting..."
-            xlr_launch_server_process "$config_file" "$server"
+            xlr_monitor_restart_server "$config_file" "$server" "Server down, restarting"
             continue
         fi
 
         if xlr_server_needs_recovery "$config_file" "$server_id" "$port" "$pid"; then
-            xlr_write_log "$monitoring_log_dir" "$server_id" "Server limbo (no map or UDP port down), restarting"
-            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id stuck without map, restarting..."
-            xlr_stop_server "$config_file" "$server"
-            sleep 2
-            xlr_launch_server_process "$config_file" "$server"
+            xlr_monitor_restart_server "$config_file" "$server" "Server limbo (no map or UDP port down), restarting"
             continue
         fi
 
@@ -224,11 +281,7 @@ xlr_monitor_once() {
         xlr_write_log "$monitoring_log_dir" "$server_id" "CPU=${current_cpu}% MEM=${current_memory}MB PID=$pid"
 
         if (( $(echo "$current_cpu > $max_cpu_total" | bc -l) )) || (( $(echo "$current_memory > $max_memory" | bc -l) )); then
-            xlr_write_log "$monitoring_log_dir" "$server_id" "Resource limit exceeded, restarting"
-            xlr_send_discord_webhook "$webhook_url" "XLR: $server_id exceeded resource limits, restarting..."
-            xlr_stop_server "$config_file" "$server"
-            sleep 2
-            xlr_launch_server_process "$config_file" "$server"
+            xlr_monitor_restart_server "$config_file" "$server" "Resource limit exceeded, restarting"
         fi
     done < <(jq -c '.servers[]' "$config_file")
 }
@@ -278,7 +331,7 @@ xlr_main() {
             xlr_display_help
             exit 0
             ;;
-        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m|sync-servers)
+        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m|sync-servers|validate-config|restore-config)
             xlr_check_dependencies || exit 1
             ;;
         *)
@@ -293,7 +346,18 @@ xlr_main() {
         exit 1
     fi
 
-    xlr_sync_config_paths "$config_file"
+    if [ "$command" != "restore-config" ]; then
+        local config_reason
+        if ! config_reason=$(xlr_validate_server_config "$config_file"); then
+            echo -e "${XLR_COLORS[red]}Invalid configuration:${XLR_COLORS[reset]} $config_reason"
+            echo "Run: $0 restore-config"
+            exit 1
+        fi
+        xlr_sync_config_paths "$config_file" || {
+            echo -e "${XLR_COLORS[red]}Failed to sync install paths in server_config.json${XLR_COLORS[reset]}"
+            exit 1
+        }
+    fi
 
     case "$command" in
         start)
@@ -321,6 +385,12 @@ xlr_main() {
             ;;
         sync-servers)
             xlr_cmd_sync_servers "$config_file"
+            ;;
+        validate-config)
+            xlr_cmd_validate_config "$config_file"
+            ;;
+        restore-config)
+            xlr_cmd_restore_config "$config_file"
             ;;
         sync-iw4m)
             local workdir
