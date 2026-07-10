@@ -1,7 +1,15 @@
 #!/bin/bash
 
 if [ "$1" = "--install" ]; then
-    source /opt/T6Server/.config/config.sh
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    WORKROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    if [ -f "$WORKROOT/.config/config.sh" ]; then
+        source "$WORKROOT/.config/config.sh"
+    elif [ -f /opt/T6Server/.config/config.sh ]; then
+        source /opt/T6Server/.config/config.sh
+    else
+        WORKDIR="$WORKROOT"
+    fi
 fi
 
 setupSystemdServices() {

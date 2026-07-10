@@ -158,7 +158,11 @@ mkdir -p "$BACKUP_DIR"
 echo "Backup: $BACKUP_DIR"
 
 if [ -f "$CONFIG_FILE" ]; then
-    cp "$CONFIG_FILE" "$BACKUP_DIR/server_config.json"
+    if jq -e '.servers | length > 0' "$CONFIG_FILE" >/dev/null 2>&1; then
+        cp "$CONFIG_FILE" "$BACKUP_DIR/server_config.json"
+    else
+        echo "[XLR] WARN: current server_config.json has empty servers[]; skipping this snapshot"
+    fi
 fi
 
 if [ -f "$SECRETS_FILE" ]; then
@@ -182,7 +186,9 @@ sync_install_paths "$CONFIG_FILE" "$DEFAULT_DIR" || true
 
 if ! jq -e '.servers | length > 0' "$CONFIG_FILE" >/dev/null 2>&1; then
     echo "[XLR] ERROR: server_config.json has no servers after update — restoring backup"
-    cp -f "$BACKUP_DIR/server_config.json" "$CONFIG_FILE"
+    if [ -f "$BACKUP_DIR/server_config.json" ]; then
+        cp -f "$BACKUP_DIR/server_config.json" "$CONFIG_FILE"
+    fi
 fi
 
 if [ -f "$BACKUP_DIR/secrets.env" ]; then

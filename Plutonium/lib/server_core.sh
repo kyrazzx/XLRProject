@@ -107,7 +107,7 @@ xlr_list_server_ids() {
 
 xlr_restore_server_config() {
     local config_file="$1"
-    local workdir backup_root latest_backup owner_home
+    local workdir backup_root owner_home backup_list latest_backup candidate count
 
     workdir=$(dirname "$(dirname "$config_file")")
     owner_home=$(getent passwd "$(stat -c '%U' "$config_file" 2>/dev/null || echo "${USER:-root}")" | cut -d: -f6)
@@ -116,13 +116,30 @@ xlr_restore_server_config() {
         backup_root="$workdir/backups"
     fi
 
-    latest_backup=$(find "$backup_root" -maxdepth 2 -type f -name 'server_config.json' 2>/dev/null | sort -r | head -n 1)
-    if [ -z "$latest_backup" ] && [ -f "${config_file}.bak" ]; then
-        latest_backup="${config_file}.bak"
+    backup_list=$(find "$backup_root" -maxdepth 2 -type f -name 'server_config.json' 2>/dev/null | sort -r)
+    while IFS= read -r candidate; do
+        [ -z "$candidate" ] && continue
+        if ! jq empty "$candidate" >/dev/null 2>&1; then
+            continue
+        fi
+        count=$(jq -r '.servers | length' "$candidate" 2>/dev/null || echo 0)
+        if [ -n "$count" ] && [ "$count" != "null" ] && [ "$count" -gt 0 ]; then
+            latest_backup="$candidate"
+            break
+        fi
+    done <<< "$backup_list"
+
+    if [ -z "${latest_backup:-}" ] && [ -f "${config_file}.bak" ]; then
+        if jq empty "${config_file}.bak" >/dev/null 2>&1; then
+            count=$(jq -r '.servers | length' "${config_file}.bak" 2>/dev/null || echo 0)
+            if [ -n "$count" ] && [ "$count" != "null" ] && [ "$count" -gt 0 ]; then
+                latest_backup="${config_file}.bak"
+            fi
+        fi
     fi
 
-    if [ -z "$latest_backup" ] || [ ! -f "$latest_backup" ]; then
-        echo "ERROR: no server_config backup found under $backup_root or ${config_file}.bak" >&2
+    if [ -z "${latest_backup:-}" ] || [ ! -f "$latest_backup" ]; then
+        echo "ERROR: no valid server_config backup (with servers[]) found under $backup_root or ${config_file}.bak" >&2
         return 1
     fi
 
