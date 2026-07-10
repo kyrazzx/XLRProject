@@ -105,6 +105,13 @@ xlr_list_server_ids() {
     jq -r '.servers[]?.id // empty' "$config_file" 2>/dev/null
 }
 
+xlr_server_is_enabled() {
+    local server_config="$1"
+    local enabled
+    enabled=$(echo "$server_config" | jq -r 'if (.enabled == false) then "false" else (.enabled // true | tostring) end')
+    [ "$enabled" = "true" ]
+}
+
 xlr_restore_server_config() {
     local config_file="$1"
     local workdir backup_root owner_home backup_list latest_backup candidate count
@@ -518,6 +525,13 @@ xlr_launch_server_process() {
 
     local install_dir game_path game_mode server_key server_port server_rcon config_file_name mod server_name server_id
     local log_dir stdout_log additional_params gamesetting bootstrapper wine_home
+
+    server_id=$(echo "$server_config" | jq -r '.id')
+    if ! xlr_server_is_enabled "$server_config"; then
+        log_dir=$(xlr_server_log_dir "$config_file" "$server_id")
+        xlr_write_log "$log_dir" "$server_id" "Refused start: server is disabled in server_config.json"
+        return 1
+    fi
 
     install_dir=$(xlr_get_install_dir "$config_file")
     bootstrapper="$install_dir/bin/plutonium-bootstrapper-win32.exe"

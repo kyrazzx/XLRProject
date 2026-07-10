@@ -48,6 +48,7 @@ xlr_display_help() {
     echo "  sync-iw4m          Sync IW4MAdmin server list"
     echo "  scheduled-restart  Restart idle servers based on schedule"
     echo "  sync-servers       Stop disabled servers and start enabled ones"
+    echo "  purge-disabled     Stop every server with enabled=false"
     echo "  validate-config    Check server_config.json integrity"
     echo "  restore-config     Restore server_config.json from latest backup"
     echo "  --help             Show this help"
@@ -150,6 +151,18 @@ xlr_monitor_restart_server() {
     return 0
 }
 
+xlr_cmd_purge_disabled() {
+    local config_file="$1"
+    local monitoring_log_dir
+    monitoring_log_dir=$(jq -r '.monitoring_config.log_directory // "./logs/monitoring"' "$config_file")
+    if [[ "$monitoring_log_dir" != /* ]]; then
+        monitoring_log_dir="$XLR_MANAGER_DIR/$monitoring_log_dir"
+    fi
+    mkdir -p "$monitoring_log_dir"
+    xlr_stop_disabled_servers "$config_file" "$monitoring_log_dir"
+    echo -e "${XLR_COLORS[green]}Disabled servers stopped (if any were running).${XLR_COLORS[reset]}"
+}
+
 xlr_cmd_sync_servers() {
     local config_file="$1"
     while IFS= read -r server; do
@@ -244,9 +257,11 @@ xlr_monitor_once() {
 
     while IFS= read -r server; do
         local server_id port enabled max_cpu max_memory pid current_cpu current_memory
-        server_id=$(echo "$server" | jq -r '.id')
         enabled=$(echo "$server" | jq -r '.enabled // true')
-        [ "$enabled" != "true" ] && continue
+        if [ "$enabled" != "true" ]; then
+            continue
+        fi
+        server_id=$(echo "$server" | jq -r '.id')
         port=$(echo "$server" | jq -r '.port')
         max_cpu=$(echo "$server" | jq -r '.resource_limits.max_cpu_percent // 90')
         max_memory=$(echo "$server" | jq -r '.resource_limits.max_memory_mb // 4096')
@@ -350,7 +365,7 @@ xlr_main() {
             xlr_display_help
             exit 0
             ;;
-        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m|sync-servers|validate-config|restore-config)
+        start|stop|restart|status|monitor|backup|scheduled-restart|update|sync-iw4m|sync-servers|validate-config|restore-config|purge-disabled)
             xlr_check_dependencies || exit 1
             ;;
         *)
@@ -404,6 +419,9 @@ xlr_main() {
             ;;
         sync-servers)
             xlr_cmd_sync_servers "$config_file"
+            ;;
+        purge-disabled)
+            xlr_cmd_purge_disabled "$config_file"
             ;;
         validate-config)
             xlr_cmd_validate_config "$config_file"
