@@ -119,24 +119,72 @@ path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
 
 if "xlr: only unlink when linked" in text:
-    open(path, "w", encoding="utf-8").write(text)
     sys.exit(0)
 
-old = re.compile(
-    r"(\t\telse\s*\{\s*\n"
-    r"\t\t\tself Unlink\(\);\s*\n"
-    r"\t\t\tself\.fly = 0;\s*\n"
-    r"\t\t\})",
-    re.MULTILINE,
-)
-new = (
-    "\t\telse if (self.fly == 1)\n"
-    "\t\t{\n"
-    "\t\t\tself Unlink(); // xlr: only unlink when linked\n"
-    "\t\t\tself.fly = 0;\n"
-    "\t\t}"
-)
-patched, count = old.subn(new, text, count=1)
+def patch_else_unlink(src):
+    patterns = [
+        (
+            re.compile(
+                r"(\t\telse\r?\n"
+                r"\t\t\{\r?\n"
+                r"\t\t\tself Unlink\(\);\r?\n"
+                r"\t\t\tself\.fly = 0;\r?\n"
+                r"\t\t\})"
+            ),
+            (
+                "\t\telse if (self.fly == 1)\n"
+                "\t\t{\n"
+                "\t\t\tself Unlink(); // xlr: only unlink when linked\n"
+                "\t\t\tself.fly = 0;\n"
+                "\t\t}"
+            ),
+        ),
+        (
+            re.compile(
+                r"(\telse\r?\n"
+                r"\t\{\r?\n"
+                r"\t\tself Unlink\(\);\r?\n"
+                r"\t\tself\.fly = 0;\r?\n"
+                r"\t\})"
+            ),
+            (
+                "\telse if (self.fly == 1)\n"
+                "\t{\n"
+                "\t\tself Unlink(); // xlr: only unlink when linked\n"
+                "\t\tself.fly = 0;\n"
+                "\t}"
+            ),
+        ),
+    ]
+
+    for pattern, repl in patterns:
+        patched, count = pattern.subn(repl, src, count=1)
+        if count == 1:
+            return patched, 1
+
+    flex = re.compile(
+        r"([ \t]+)else[ \t]*\r?\n"
+        r"\1\{[ \t]*\r?\n"
+        r"\1[ \t]+self Unlink\(\);[ \t]*\r?\n"
+        r"\1[ \t]+self\.fly = 0;[ \t]*\r?\n"
+        r"\1\}"
+    )
+
+    def repl_fn(match):
+        indent = match.group(1)
+        inner = indent + ("\t" if "\t" in indent else "    ")
+        return (
+            f"{indent}else if (self.fly == 1)\n"
+            f"{indent}{{\n"
+            f"{inner}self Unlink(); // xlr: only unlink when linked\n"
+            f"{inner}self.fly = 0;\n"
+            f"{indent}}}"
+        )
+
+    patched, count = flex.subn(repl_fn, src, count=1)
+    return patched, count
+
+patched, count = patch_else_unlink(text)
 if count != 1:
     print(f"[XLR] ERROR: ufo mode patch did not apply to {path}", file=sys.stderr)
     sys.exit(1)
@@ -295,7 +343,9 @@ xlr_stage_chat_commands() {
     done
     [ -f "$src_dir/mp/chat_command_suicide.gsc" ] && cp -f "$src_dir/mp/chat_command_suicide.gsc" "$stage_dir/mp/" || true
 
-    [ -f "$stage_dir/chat_command_ufo_mode.gsc" ] && xlr_patch_ufo_mode_gsc "$stage_dir/chat_command_ufo_mode.gsc" || true
+    if [ -f "$stage_dir/chat_command_ufo_mode.gsc" ]; then
+        xlr_patch_ufo_mode_gsc "$stage_dir/chat_command_ufo_mode.gsc" || return 1
+    fi
 
     xlr_patch_chat_commands_gsc "$stage_dir/chat_commands.gsc" "$ports_csv" "$owner_id" || return 1
     printf '%s' "$t6_root"
