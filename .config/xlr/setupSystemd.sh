@@ -29,9 +29,11 @@ Type=simple
 User=root
 WorkingDirectory=$plutonium_dir
 TimeoutStopSec=120
+KillMode=process
 ExecStartPre=/bin/bash $plutonium_dir/XLRManager.sh validate-config
 ExecStart=/bin/bash $plutonium_dir/XLRManager.sh monitor
-ExecStop=/bin/bash $plutonium_dir/XLRManager.sh stop all
+# Do not stop game servers here — FFA/TDM keep running when the monitor restarts.
+ExecStop=/bin/kill -TERM \$MAINPID
 Restart=always
 RestartSec=5
 
